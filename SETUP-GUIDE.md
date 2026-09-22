@@ -62,14 +62,14 @@ git push -u origin main
 ### 2.3 Créer les tables
 
 1. Dans Supabase, va à **SQL Editor → New Query**
-2. Copie-colle tout le SQL du **README.md** section "### 2. Setup Supabase"
+2. Copie-colle le contenu de `supabase/schema.sql`
 3. Clique **"Run"** (triangle play en haut à droite)
 4. ✅ Les tables sont créées!
 
-### 2.4 Initialiser des recettes (optionnel)
+### 2.4 Initialiser les recettes
 
 1. Nouveau SQL Query
-2. Copie-colle le contenu de `seed-recipes.sql`
+2. Copie-colle le contenu de `supabase/seed.sql`
 3. Clique "Run"
 4. ✅ Tu as des recettes de base!
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/services/supabaseClient'
 
 export function useAuth() {
@@ -30,7 +30,7 @@ export function useAuth() {
 }
 
 export function useUser() {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {

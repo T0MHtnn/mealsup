@@ -2,10 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* MealsUp Design System — tokens (v1, septembre 2026) */
 :root {
-  --primary: 16 185 129; /* Emerald-500 */
-  --secondary: 59 130 246; /* Blue-500 */
-  --accent: 168 85 247; /* Purple-500 */
+  --color-primary: #1F7A46;
+  --color-primary-strong: #16532F;
+  --color-accent: #B85220;
+  --color-danger: #C1442E;
+  --color-ink: #22301F;
+  --color-ink-muted: #5B6B57;
+  --color-surface-100: #FBF8F2;
+  --color-surface-200: #FFFFFF;
+  --color-tint-sage: #E4EEE1;
+  --color-tint-sand: #EFE3C9;
+  --color-tint-clay: #F7DCC9;
+  --color-border: #E6DFCF;
+}
+
+.dark {
+  --color-primary: #2F9159;
+  --color-primary-strong: #4FAE78;
+  --color-accent: #E08A52;
+  --color-danger: #E2685A;
+  --color-ink: #F3F1E9;
+  --color-ink-muted: #A9B29E;
+  --color-surface-100: #14170F;
+  --color-surface-200: #1E2318;
+  --color-tint-sage: #22331F;
+  --color-tint-sand: #332B18;
+  --color-tint-clay: #3A281D;
+  --color-border: #33392A;
 }
 
 * {
@@ -20,11 +45,15 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Karla', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--color-surface-100);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* PWA install prompt styling */

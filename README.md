@@ -47,147 +47,12 @@ L'app sera disponible à `http://localhost:5173`
 
 #### Créer les tables SQL
 
-Copie ce SQL dans l'éditeur SQL de Supabase (Dashboard → SQL Editor → New Query):
+Dans le SQL Editor de Supabase (Dashboard → SQL Editor → New Query), exécute dans cet ordre :
 
-```sql
--- ============ USERS ============
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE NOT NULL,
-  username TEXT,
-  auth_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  allergies JSONB DEFAULT '[]'::jsonb,
-  preferences JSONB DEFAULT '[]'::jsonb,
-  dietary_restrictions JSONB DEFAULT '[]'::jsonb,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
+1. **`supabase/schema.sql`** — tables, triggers, règles RLS et bucket des avatars
+2. **`supabase/seed.sql`** — les recettes de base avec leurs ingrédients
 
--- ============ FRIDGE ITEMS ============
-CREATE TABLE fridge_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  food_name TEXT NOT NULL,
-  category TEXT NOT NULL, -- 'Fruits', 'Légumes', 'Viandes', etc.
-  shelf_life_days INTEGER,
-  quantity TEXT,
-  unit TEXT, -- 'pièce', 'g', 'L'
-  added_date TIMESTAMP DEFAULT NOW(),
-  expiry_date TIMESTAMP,
-  is_available BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- ============ RECIPES ============
-CREATE TABLE recipes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-  title TEXT NOT NULL,
-  description TEXT,
-  prep_time_mins INTEGER,
-  cook_time_mins INTEGER,
-  servings INTEGER DEFAULT 4,
-  difficulty INTEGER DEFAULT 3, -- 1-5
-  dietary_type TEXT, -- 'light', 'gras', 'protéiné', 'sportif', 'normal'
-  tags JSONB DEFAULT '[]'::jsonb,
-  instructions JSONB DEFAULT '[]'::jsonb, -- Array of steps
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  visibility TEXT DEFAULT 'public' -- 'public', 'private', 'friend_shared'
-);
-
--- ============ RECIPE INGREDIENTS ============
-CREATE TABLE recipe_ingredients (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-  ingredient_name TEXT NOT NULL,
-  quantity FLOAT,
-  unit TEXT, -- 'g', 'mL', 'pièce'
-  optional BOOLEAN DEFAULT FALSE
-);
-
--- ============ SHOPPING LISTS ============
-CREATE TABLE shopping_lists (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  status TEXT DEFAULT 'draft', -- 'draft', 'active', 'completed'
-  total_items INTEGER DEFAULT 0
-);
-
--- ============ SHOPPING LIST ITEMS ============
-CREATE TABLE shopping_list_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  shopping_list_id UUID NOT NULL REFERENCES shopping_lists(id) ON DELETE CASCADE,
-  food_name TEXT NOT NULL,
-  category TEXT, -- Par rayon
-  quantity TEXT,
-  unit TEXT,
-  is_purchased BOOLEAN DEFAULT FALSE,
-  estimated_price FLOAT,
-  added_by_recipe_id UUID REFERENCES recipes(id) ON DELETE SET NULL
-);
-
--- ============ PURCHASE HISTORY ============
-CREATE TABLE purchase_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  shopping_list_id UUID REFERENCES shopping_lists(id) ON DELETE SET NULL,
-  date_purchased TIMESTAMP DEFAULT NOW(),
-  total_cost FLOAT,
-  duration_in_fridge_days INTEGER,
-  items_bought JSONB DEFAULT '[]'::jsonb
-);
-
--- ============ Enable RLS ============
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE fridge_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE recipes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE recipe_ingredients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE shopping_lists ENABLE ROW LEVEL SECURITY;
-ALTER TABLE shopping_list_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE purchase_history ENABLE ROW LEVEL SECURITY;
-
--- ============ RLS POLICIES ============
--- Users can only see their own data
-CREATE POLICY "Users can read own data" ON users FOR SELECT
-  USING (auth.uid() = auth_id);
-
-CREATE POLICY "Users can update own data" ON users FOR UPDATE
-  USING (auth.uid() = auth_id);
-
--- Fridge items
-CREATE POLICY "Users can read own fridge" ON fridge_items FOR SELECT
-  USING (user_id = (SELECT id FROM users WHERE auth_id = auth.uid()));
-
-CREATE POLICY "Users can create own fridge items" ON fridge_items FOR INSERT
-  WITH CHECK (user_id = (SELECT id FROM users WHERE auth_id = auth.uid()));
-
-CREATE POLICY "Users can update own fridge items" ON fridge_items FOR UPDATE
-  USING (user_id = (SELECT id FROM users WHERE auth_id = auth.uid()));
-
-CREATE POLICY "Users can delete own fridge items" ON fridge_items FOR DELETE
-  USING (user_id = (SELECT id FROM users WHERE auth_id = auth.uid()));
-
--- Shopping lists
-CREATE POLICY "Users can read own shopping lists" ON shopping_lists FOR SELECT
-  USING (user_id = (SELECT id FROM users WHERE auth_id = auth.uid()));
-
-CREATE POLICY "Users can create shopping lists" ON shopping_lists FOR INSERT
-  WITH CHECK (user_id = (SELECT id FROM users WHERE auth_id = auth.uid()));
-
--- Recipes (public recipes visible to all, private only to owner)
-CREATE POLICY "Users can read public recipes" ON recipes FOR SELECT
-  USING (visibility = 'public' OR created_by = (SELECT id FROM users WHERE auth_id = auth.uid()));
-
--- Purchase history
-CREATE POLICY "Users can read own purchase history" ON purchase_history FOR SELECT
-  USING (user_id = (SELECT id FROM users WHERE auth_id = auth.uid()));
-```
-
-**Exécute ce SQL** en cliquant sur "Run" dans le SQL Editor de Supabase.
+Les deux fichiers sont idempotents : tu peux les relancer sans risque après une mise à jour.
 
 ### 3. Déployer sur Vercel
 
@@ -251,7 +116,8 @@ menu-app/
 │   ├── sw.js                # Service Worker
 │   └── icons/               # App icons
 ├── supabase/
-│   └── migrations/          # SQL migrations (optional)
+│   ├── schema.sql           # Structure de la base (à lancer en 1er)
+│   └── seed.sql             # Recettes de base (à lancer en 2e)
 ├── .env.example
 ├── .gitignore
 ├── package.json

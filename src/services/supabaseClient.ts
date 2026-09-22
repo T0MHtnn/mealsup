@@ -132,13 +132,60 @@ export const shoppingService = {
     return data?.[0]
   },
 
-  addItemToList: async (listId: string, item: any) => {
+  getOrCreateActiveList: async (userId: string) => {
+    const { data: existing, error: findError } = await supabase
+      .from('shopping_lists')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (findError) throw findError
+    if (existing && existing.length > 0) return existing[0]
+
     const { data, error } = await supabase
-      .from('shopping_list_items')
-      .insert([{ shopping_list_id: listId, ...item }])
+      .from('shopping_lists')
+      .insert([{ user_id: userId, status: 'draft' }])
       .select()
     if (error) throw error
     return data?.[0]
+  },
+
+  addItemToList: async (listId: string, item: any) => {
+    const { data, error } = await supabase
+      .from('shopping_list_items')
+      .insert([{ shopping_list_id: listId, is_purchased: false, ...item }])
+      .select()
+    if (error) throw error
+    return data?.[0]
+  },
+
+  toggleItemChecked: async (itemId: string, isChecked: boolean) => {
+    const { data, error } = await supabase
+      .from('shopping_list_items')
+      .update({ is_purchased: isChecked })
+      .eq('id', itemId)
+      .select()
+    if (error) throw error
+    return data?.[0]
+  },
+
+  updateItemQuantity: async (itemId: string, quantity: number) => {
+    const { data, error } = await supabase
+      .from('shopping_list_items')
+      .update({ quantity })
+      .eq('id', itemId)
+      .select()
+    if (error) throw error
+    return data?.[0]
+  },
+
+  removeItem: async (itemId: string) => {
+    const { error } = await supabase
+      .from('shopping_list_items')
+      .delete()
+      .eq('id', itemId)
+    if (error) throw error
   },
 
   getListItems: async (listId: string) => {
@@ -159,14 +206,74 @@ export const shoppingService = {
     if (error) throw error
   },
 
-  getShoppingHistory: async (userId: string) => {
+  completeList: async (userId: string, listId: string, items: any[]) => {
+    const { error: historyError } = await supabase
+      .from('purchase_history')
+      .insert([
+        {
+          user_id: userId,
+          shopping_list_id: listId,
+          items,
+          date_purchased: new Date().toISOString(),
+        },
+      ])
+    if (historyError) throw historyError
+
+    const { error: statusError } = await supabase
+      .from('shopping_lists')
+      .update({ status: 'completed' })
+      .eq('id', listId)
+    if (statusError) throw statusError
+  },
+
+  getShoppingHistory: async (userId: string, limit = 10) => {
     const { data, error } = await supabase
       .from('purchase_history')
       .select('*')
       .eq('user_id', userId)
       .order('date_purchased', { ascending: false })
+      .limit(limit)
     if (error) throw error
     return data || []
+  },
+}
+
+// ============ FAVORITES ============
+
+export const favoriteService = {
+  getFavoriteIds: async (userId: string) => {
+    const { data, error } = await supabase
+      .from('favorite_recipes')
+      .select('recipe_id')
+      .eq('user_id', userId)
+    if (error) throw error
+    return (data || []).map((row) => row.recipe_id)
+  },
+
+  getFavoriteRecipes: async (userId: string) => {
+    const { data, error } = await supabase
+      .from('favorite_recipes')
+      .select('recipe_id, recipes(*)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data || []).map((row: any) => row.recipes).filter(Boolean)
+  },
+
+  addFavorite: async (userId: string, recipeId: string) => {
+    const { error } = await supabase
+      .from('favorite_recipes')
+      .insert([{ user_id: userId, recipe_id: recipeId }])
+    if (error) throw error
+  },
+
+  removeFavorite: async (userId: string, recipeId: string) => {
+    const { error } = await supabase
+      .from('favorite_recipes')
+      .delete()
+      .eq('user_id', userId)
+      .eq('recipe_id', recipeId)
+    if (error) throw error
   },
 }
 
@@ -178,16 +285,60 @@ export const userService = {
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
     if (error) throw error
     return data
   },
 
   updatePreferences: async (userId: string, preferences: any) => {
+    const { data: userData } = await supabase.auth.getUser()
     const { error } = await supabase
       .from('users')
-      .update(preferences)
-      .eq('id', userId)
+      .upsert({ id: userId, email: userData.user?.email, ...preferences })
+    if (error) throw error
+  },
+}
+
+// ============ STOCKAGE (AVATAR) ============
+
+export const storageService = {
+  uploadAvatar: async (userId: string, file: File) => {
+    const ext = file.name.split('.').pop() || 'jpg'
+    const path = `${userId}/avatar.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (error) throw error
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    return `${data.publicUrl}?t=${Date.now()}`
+  },
+}
+
+// ============ PLANNING DE LA SEMAINE ============
+
+export const mealPlanService = {
+  getWeekPlan: async (userId: string, startDate: string, endDate: string) => {
+    const { data, error } = await supabase
+      .from('planned_meals')
+      .select('*, recipes(*, recipe_ingredients(*))')
+      .eq('user_id', userId)
+      .gte('meal_date', startDate)
+      .lte('meal_date', endDate)
+    if (error) throw error
+    return data || []
+  },
+
+  setMeal: async (userId: string, mealDate: string, mealType: string, recipeId: string) => {
+    const { data, error } = await supabase
+      .from('planned_meals')
+      .upsert([{ user_id: userId, meal_date: mealDate, meal_type: mealType, recipe_id: recipeId }], {
+        onConflict: 'user_id,meal_date,meal_type',
+      })
+      .select('*, recipes(*, recipe_ingredients(*))')
+    if (error) throw error
+    return data?.[0]
+  },
+
+  removeMeal: async (id: string) => {
+    const { error } = await supabase.from('planned_meals').delete().eq('id', id)
     if (error) throw error
   },
 }

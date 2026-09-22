@@ -5,11 +5,13 @@ import { useAuthStore } from '@/store/authStore'
 
 // Pages
 import LoginPage from '@/pages/Login'
+import SignupPage from '@/pages/Signup'
 import DashboardPage from '@/pages/Dashboard'
 import FridgePage from '@/pages/Fridge'
 import RecipesPage from '@/pages/Recipes'
+import RecipeDetailPage from '@/pages/RecipeDetail'
 import ShoppingPage from '@/pages/Shopping'
-import PreferencesPage from '@/pages/Preferences'
+import ProfilePage from '@/pages/Profile'
 
 // Layout
 import MainLayout from '@/components/layout/MainLayout'
@@ -35,6 +37,7 @@ function App() {
         {!session ? (
           <>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </>
         ) : (
@@ -42,8 +45,10 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/fridge" element={<FridgePage />} />
             <Route path="/recipes" element={<RecipesPage />} />
+            <Route path="/recipes/:id" element={<RecipeDetailPage />} />
             <Route path="/shopping" element={<ShoppingPage />} />
-            <Route path="/preferences" element={<PreferencesPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         )}
       </Routes>

@@ -4,12 +4,12 @@ export interface FridgeItem {
   id: string
   user_id: string
   food_name: string
-  category: string // 'Fruits', 'Légumes', 'Viandes', etc.
-  shelf_life_days: number
-  quantity: string | number
-  unit: string // 'pièce', 'g', 'L', etc.
+  category: string | null // 'Fruits', 'Légumes', 'Viandes', etc.
+  shelf_life_days?: number
+  quantity: string | number | null
+  unit: string | null // 'pièce', 'g', 'L', etc.
   added_date: string
-  expiry_date: string
+  expiry_date: string | null
   is_available: boolean
 }
 
@@ -50,6 +50,7 @@ export const useFridgeStore = create<FridgeStore>((set, get) => ({
   getExpiringItems: (daysThreshold) => {
     const today = new Date()
     return get().items.filter((item) => {
+      if (!item.expiry_date) return false
       const expiryDate = new Date(item.expiry_date)
       const daysUntilExpiry = Math.ceil(
         (expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
