@@ -3,13 +3,18 @@ import { useAuthStore } from '@/store/authStore'
 import { userService } from '@/services/supabaseClient'
 import type { DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
 import { normalizeText } from '@/utils/text'
-import { getFoodFlag, getRecipeWarnings } from '@/utils/warnings'
+import { getFoodFlag, getMissingEquipment, getRecipeWarnings } from '@/utils/warnings'
 
-/** Loads the user's excluded foods + dietary restrictions and exposes checkers for foods and recipes. */
+/**
+ * Loads the user's excluded foods, dietary restrictions and kitchen equipment,
+ * and exposes checkers for foods and recipes.
+ */
 export function useFoodWarnings() {
   const userId = useAuthStore((state) => state.session?.user.id)
   const [excludedFoods, setExcludedFoods] = useState<string[]>([])
   const [restrictions, setRestrictions] = useState<DietaryRestrictionKey[]>([])
+  const [equipmentAll, setEquipmentAll] = useState(true)
+  const [equipment, setEquipment] = useState<string[]>([])
 
   useEffect(() => {
     if (!userId) return
@@ -22,6 +27,8 @@ export function useFoodWarnings() {
             .filter(Boolean)
         )
         setRestrictions(Array.isArray(prefs?.dietary_restrictions) ? prefs.dietary_restrictions : [])
+        setEquipmentAll(prefs?.equipment_all ?? true)
+        setEquipment(Array.isArray(prefs?.equipment) ? prefs.equipment : [])
       })
       .catch((err) => console.error('Food warnings load error:', err))
   }, [userId])
@@ -36,5 +43,10 @@ export function useFoodWarnings() {
     [excludedFoods, restrictions]
   )
 
-  return { foodFlag, recipeHasWarning }
+  const missingEquipment = useCallback(
+    (recipe: any) => getMissingEquipment(recipe, equipmentAll, equipment),
+    [equipmentAll, equipment]
+  )
+
+  return { foodFlag, recipeHasWarning, missingEquipment }
 }

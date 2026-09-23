@@ -6,14 +6,46 @@ import { useTranslation } from '@/hooks/useTranslation'
 import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import { GROCERY_CATEGORIES, GROCERY_CATALOG, type GroceryCategory } from '@/constants/groceryCatalog'
 import { normalizeText } from '@/utils/text'
+import { classifyGroceryItem, itemCategory } from '@/utils/groceryCategory'
+import { formatAmount } from '@/utils/quantity'
+import { formatEuros } from '@/utils/prices'
+import { usePrices } from '@/hooks/usePrices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import Modal from '@/components/common/Modal'
 import FoodWarningBadge from '@/components/common/FoodWarningBadge'
+
+/** Quantity you can type directly instead of tapping "+" many times; saved on blur / Enter. */
+function QuantityInput({ value, onCommit }: { value: number; onCommit: (quantity: number) => void }) {
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => setDraft(String(value)), [value])
+
+  const commit = () => {
+    const parsed = parseFloat(draft.replace(',', '.'))
+    const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+    if (next !== value) onCommit(next)
+    else setDraft(String(value))
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={(e) => e.target.select()}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      aria-label="Quantité"
+      className="w-12 text-center text-sm font-display font-semibold text-ink bg-transparent border border-border rounded-sm py-0.5"
+    />
+  )
+}
 
 export default function ShoppingPage() {
   const { t, language } = useTranslation()
   const userId = useAuthStore((state) => state.session?.user.id)
   const { foodFlag } = useFoodWarnings()
+  const { itemCost, packLabel } = usePrices()
   const [list, setList] = useState<any>(null)
   const [items, setItems] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -24,6 +56,7 @@ export default function ShoppingPage() {
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState<any[]>([])
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
 
   useEffect(() => {
     if (!userId) return
@@ -49,18 +82,6 @@ export default function ShoppingPage() {
     for (const item of items) map.set(normalizeText(item.food_name), item)
     return map
   }, [items])
-
-  const categoryForName = (name: string): GroceryCategory | null => {
-    const normalized = normalizeText(name)
-    for (const cat of GROCERY_CATEGORIES) {
-      if (GROCERY_CATALOG[cat].some((c) => normalizeText(c) === normalized)) return cat
-    }
-    for (const cat of GROCERY_CATEGORIES) {
-      if (GROCERY_CATALOG[cat].some((c) => normalized.includes(normalizeText(c)) || normalizeText(c).includes(normalized)))
-        return cat
-    }
-    return null
-  }
 
   const setQuantity = async (name: string, quantity: number, category: string | null = selectedCategory) => {
     if (!list) return
@@ -93,7 +114,7 @@ export default function ShoppingPage() {
     e.preventDefault()
     const name = customItemName.trim()
     if (!name) return
-    await setQuantity(name, 1, categoryForName(name))
+    await setQuantity(name, 1, classifyGroceryItem(name))
     setCustomItemName('')
   }
 
@@ -118,17 +139,34 @@ export default function ShoppingPage() {
     setItems([])
   }
 
+  const handleClearList = async () => {
+    if (!list) return
+    if (!confirmClear) {
+      setConfirmClear(true)
+      return
+    }
+    setConfirmClear(false)
+    const previous = items
+    setItems([])
+    await shoppingService.clearList(list.id).catch((err) => {
+      console.error('Clear list error:', err)
+      setItems(previous)
+    })
+  }
+
   const toggleCollapsed = (category: string) => {
     const next = new Set(collapsed)
     next.has(category) ? next.delete(category) : next.add(category)
     setCollapsed(next)
   }
 
-  const knownCategories: string[] = [...GROCERY_CATEGORIES]
-  const grouped = [
-    ...GROCERY_CATEGORIES.map((cat) => ({ category: cat, items: items.filter((i) => i.category === cat) })),
-    { category: 'Autre', items: items.filter((i) => !i.category || !knownCategories.includes(i.category)) },
-  ].filter((g) => g.items.length > 0)
+  // Items saved with an old or missing category are placed by their name
+  const grouped = GROCERY_CATEGORIES.map((cat) => ({
+    category: cat,
+    items: items.filter((i) => itemCategory(i) === cat),
+  })).filter((g) => g.items.length > 0)
+
+  const estimatedTotal = items.reduce((sum, item) => sum + itemCost(item), 0)
 
   const totalCount = items.length
   const checkedCount = items.filter((i) => i.is_purchased).length
@@ -191,9 +229,12 @@ export default function ShoppingPage() {
                     qty > 0 ? 'bg-tint-sage border-primary' : 'bg-surface-200 border-border'
                   }`}
                 >
-                  <span className={`text-sm flex items-center gap-1.5 ${qty > 0 ? 'text-ink font-medium' : 'text-ink-muted'}`}>
-                    {name}
-                    <FoodWarningBadge flag={foodFlag(name)} />
+                  <span className="min-w-0">
+                    <span className={`text-sm flex items-center gap-1.5 ${qty > 0 ? 'text-ink font-medium' : 'text-ink-muted'}`}>
+                      {name}
+                      <FoodWarningBadge flag={foodFlag(name)} />
+                    </span>
+                    <span className="block text-[11px] text-ink-muted">{packLabel(name)}</span>
                   </span>
                   <div className="flex items-center gap-3">
                     <button
@@ -204,7 +245,10 @@ export default function ShoppingPage() {
                     >
                       <Minus size={13} />
                     </button>
-                    <span className="w-4 text-center text-sm font-display font-semibold text-ink">{qty}</span>
+                    <span className="flex items-center gap-1">
+                      <QuantityInput value={qty} onCommit={(n) => setQuantity(name, n)} />
+                      {existing?.unit && <span className="text-xs text-ink-muted">{existing.unit}</span>}
+                    </span>
                     <button
                       onClick={() => setQuantity(name, qty + 1)}
                       aria-label="Increase"
@@ -217,6 +261,8 @@ export default function ShoppingPage() {
               )
             })}
           </div>
+
+          <p className="text-[11px] text-ink-muted mt-3">{t('prices.disclaimer')}</p>
 
           <form onSubmit={handleAddCustom} className="flex gap-2 mt-3">
             <input
@@ -245,6 +291,14 @@ export default function ShoppingPage() {
               </span>
               <span className="text-primary font-semibold">{progressPct}%</span>
             </div>
+          </div>
+
+          <div className="bg-tint-sand rounded-md px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-display font-semibold text-ink">{t('prices.estimatedTotal')}</span>
+              <span className="text-sm font-display font-bold text-ink">≈ {formatEuros(estimatedTotal)}</span>
+            </div>
+            <p className="text-[11px] text-ink-muted mt-0.5">{t('prices.disclaimer')}</p>
           </div>
 
           {grouped.map((group) => {
@@ -287,9 +341,14 @@ export default function ShoppingPage() {
                           {item.food_name}
                         </span>
                         <FoodWarningBadge flag={foodFlag(item.food_name)} />
-                        {item.quantity > 1 && (
-                          <span className="text-xs font-semibold text-primary">×{item.quantity}</span>
-                        )}
+                        <span className="flex flex-col items-end shrink-0">
+                          {formatAmount(item.quantity, item.unit) && (
+                            <span className="text-xs font-semibold text-primary">
+                              {formatAmount(item.quantity, item.unit)}
+                            </span>
+                          )}
+                          <span className="text-[11px] text-ink-muted">≈ {formatEuros(itemCost(item))}</span>
+                        </span>
                         {!item.category && (
                           <span className="text-[10px] font-semibold text-accent bg-tint-clay px-2 py-0.5 rounded-full">
                             {t('shopping.addedBadge')}
@@ -316,11 +375,22 @@ export default function ShoppingPage() {
             <Check size={18} />
             {t('shopping.complete')}
           </button>
+
+          <button
+            onClick={handleClearList}
+            onBlur={() => setConfirmClear(false)}
+            className={`w-full py-2.5 rounded-full font-display font-semibold flex items-center justify-center gap-2 border ${
+              confirmClear ? 'bg-danger text-white border-danger' : 'border-border text-danger hover:bg-surface-200'
+            }`}
+          >
+            <Trash2 size={17} />
+            {confirmClear ? t('shopping.clearConfirm') : t('shopping.clearList')}
+          </button>
         </div>
       )}
 
       {showHistory && (
-        <Modal title={t('shopping.history')} onClose={() => setShowHistory(false)}>
+        <Modal title={t('shopping.history')} onClose={() => setShowHistory(false)} tall>
           {history.length === 0 ? (
             <p className="text-center text-ink-muted text-sm py-6">{t('shopping.noHistory')}</p>
           ) : (
@@ -364,8 +434,8 @@ export default function ShoppingPage() {
                                 {item.food_name}
                                 <FoodWarningBadge flag={foodFlag(item.food_name)} />
                               </span>
-                              <span className="text-primary font-semibold">
-                                {item.quantity} {item.unit || ''}
+                              <span className="text-primary font-semibold shrink-0 ml-3">
+                                {formatAmount(item.quantity, item.unit)}
                               </span>
                             </div>
                           ))

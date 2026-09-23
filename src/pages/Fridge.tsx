@@ -6,6 +6,7 @@ import { fridgeService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import { normalizeText } from '@/utils/text'
+import { classifyGroceryItem } from '@/utils/groceryCategory'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import FoodWarningBadge from '@/components/common/FoodWarningBadge'
 
@@ -36,7 +37,7 @@ export default function FridgePage() {
 
     const newItem = await fridgeService.addItem(userId, {
       food_name: foodName.trim(),
-      category: 'Autre',
+      category: classifyGroceryItem(foodName),
       quantity: quantity || null,
       unit: null,
       added_date: new Date().toISOString(),
@@ -100,12 +101,22 @@ export default function FridgePage() {
               placeholder={t('fridge.quantity')}
               className="px-3 py-2 border border-border rounded-sm bg-surface-200 text-ink"
             />
-            <input
-              type="date"
-              value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-              className="px-3 py-2 border border-border rounded-sm bg-surface-200 text-ink"
-            />
+            <div className="relative">
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                aria-label={t('fridge.expiryPlaceholder')}
+                className={`w-full px-3 py-2 border border-border rounded-sm bg-surface-200 ${
+                  expiryDate ? 'text-ink' : 'text-transparent'
+                }`}
+              />
+              {!expiryDate && (
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">
+                  {t('fridge.expiryPlaceholder')}
+                </span>
+              )}
+            </div>
           </div>
           <button type="submit" className="w-full py-2.5 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong">
             {t('fridge.submit')}

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LogOut, User as UserIcon, Sun, Moon, Monitor, Check, Pencil, X } from 'lucide-react'
+import { LogOut, User as UserIcon, Sun, Moon, Monitor, Check, Pencil, X, MessageSquare } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUiStore, type Theme } from '@/store/uiStore'
-import { authService, userService } from '@/services/supabaseClient'
+import { authService, userService, feedbackService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import { EQUIPMENT_LIST, type EquipmentKey } from '@/constants/equipment'
 import { DIETARY_RESTRICTIONS, type DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
-import { GROCERY_CATALOG } from '@/constants/groceryCatalog'
+import { FOOD_CATEGORIES, GROCERY_CATALOG } from '@/constants/groceryCatalog'
+import { STORES, type StoreKey } from '@/constants/prices'
 import { normalizeText } from '@/utils/text'
 import LanguageSwitch from '@/components/common/LanguageSwitch'
 import EditProfileModal from '@/components/EditProfileModal'
@@ -18,7 +19,7 @@ const THEME_OPTIONS: { value: Theme; icon: typeof Sun }[] = [
 ]
 
 const EXTRA_EXCLUDABLE = ['Arachides', 'Fruits à coque', 'Gluten', 'Soja', 'Crustacés', 'Mollusques', 'Sésame']
-const EXCLUDABLE_FOODS = Array.from(new Set([...Object.values(GROCERY_CATALOG).flat(), ...EXTRA_EXCLUDABLE]))
+const EXCLUDABLE_FOODS = Array.from(new Set([...FOOD_CATEGORIES.flatMap((cat) => GROCERY_CATALOG[cat]), ...EXTRA_EXCLUDABLE]))
 
 export default function ProfilePage() {
   const { t } = useTranslation()
@@ -38,8 +39,11 @@ export default function ProfilePage() {
   const [dietaryRestrictions, setDietaryRestrictions] = useState<Set<DietaryRestrictionKey>>(new Set())
   const [equipmentAll, setEquipmentAll] = useState(true)
   const [equipment, setEquipment] = useState<Set<EquipmentKey>>(new Set())
+  const [preferredStore, setPreferredStore] = useState<StoreKey>('average')
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [feedback, setFeedback] = useState('')
+  const [feedbackState, setFeedbackState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
   useEffect(() => {
     if (!userId) return
@@ -54,6 +58,7 @@ export default function ProfilePage() {
         )
         setEquipmentAll(data?.equipment_all ?? true)
         setEquipment(new Set(Array.isArray(data?.equipment) ? data.equipment : []))
+        if (STORES.some((s) => s.key === data?.preferred_store)) setPreferredStore(data.preferred_store)
       })
       .catch((err) => console.error('Profile load error:', err))
   }, [userId])
@@ -99,12 +104,28 @@ export default function ProfilePage() {
         dietary_restrictions: Array.from(dietaryRestrictions),
         equipment_all: equipmentAll,
         equipment: Array.from(equipment),
+        preferred_store: preferredStore,
       })
       setSaved(true)
     } catch (err) {
       console.error('Save preferences error:', err)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleSendFeedback = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const message = feedback.trim()
+    if (!userId || !message) return
+    setFeedbackState('sending')
+    try {
+      await feedbackService.send(userId, session?.user.email, message)
+      setFeedback('')
+      setFeedbackState('sent')
+    } catch (err) {
+      console.error('Send feedback error:', err)
+      setFeedbackState('error')
     }
   }
 
@@ -225,6 +246,25 @@ export default function ProfilePage() {
         <h2 className="font-display font-semibold text-ink">{t('profile.preferences')}</h2>
 
         <div>
+          <label htmlFor="preferred-store" className="block text-sm font-medium text-ink mb-1">
+            {t('profile.store')}
+          </label>
+          <select
+            id="preferred-store"
+            value={preferredStore}
+            onChange={(e) => setPreferredStore(e.target.value as StoreKey)}
+            className="w-full px-3 py-2 border border-border rounded-sm bg-surface-200 text-ink text-sm"
+          >
+            {STORES.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-ink-muted mt-1">{t('prices.storeHint')}</p>
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-ink mb-1">{t('profile.dietaryRestrictions')}</label>
           <div className="grid grid-cols-2 gap-2 mt-2">
             {DIETARY_RESTRICTIONS.map(({ key }) => {
@@ -306,6 +346,34 @@ export default function ProfilePage() {
           className="w-full py-2.5 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong disabled:opacity-50"
         >
           {isSaving ? t('profile.saving') : saved ? t('profile.saved') : t('profile.save')}
+        </button>
+      </form>
+
+      <form onSubmit={handleSendFeedback} className="bg-surface-200 border border-border rounded-md p-4 space-y-3">
+        <h2 className="font-display font-semibold text-ink flex items-center gap-2">
+          <MessageSquare size={18} className="text-primary" />
+          {t('profile.contact')}
+        </h2>
+        <p className="text-xs text-ink-muted">{t('profile.contactHint')}</p>
+        <textarea
+          value={feedback}
+          onChange={(e) => {
+            setFeedback(e.target.value)
+            if (feedbackState !== 'sending') setFeedbackState('idle')
+          }}
+          placeholder={t('profile.contactPlaceholder')}
+          rows={5}
+          maxLength={5000}
+          className="w-full px-3 py-2 border border-border rounded-sm bg-surface-200 text-ink text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+        />
+        {feedbackState === 'sent' && <p className="text-sm text-primary">{t('profile.contactSent')}</p>}
+        {feedbackState === 'error' && <p className="text-sm text-danger">{t('profile.contactError')}</p>}
+        <button
+          type="submit"
+          disabled={!feedback.trim() || feedbackState === 'sending'}
+          className="w-full py-2.5 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong disabled:opacity-50"
+        >
+          {feedbackState === 'sending' ? t('profile.contactSending') : t('profile.contactSend')}
         </button>
       </form>
 

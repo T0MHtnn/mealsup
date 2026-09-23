@@ -10,6 +10,7 @@ import DashboardPage from '@/pages/Dashboard'
 import FridgePage from '@/pages/Fridge'
 import RecipesPage from '@/pages/Recipes'
 import RecipeDetailPage from '@/pages/RecipeDetail'
+import RecipeEditorPage from '@/pages/RecipeEditor'
 import ShoppingPage from '@/pages/Shopping'
 import ProfilePage from '@/pages/Profile'
 
@@ -45,7 +46,9 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/fridge" element={<FridgePage />} />
             <Route path="/recipes" element={<RecipesPage />} />
+            <Route path="/recipes/new" element={<RecipeEditorPage />} />
             <Route path="/recipes/:id" element={<RecipeDetailPage />} />
+            <Route path="/recipes/:id/edit" element={<RecipeEditorPage />} />
             <Route path="/shopping" element={<ShoppingPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

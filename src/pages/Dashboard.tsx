@@ -1,33 +1,39 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, Utensils, Cookie, Moon, Plus, X, Check, AlertTriangle } from 'lucide-react'
+import { Clock, Utensils, Cookie, Moon, Plus, X, Check, AlertTriangle, Wrench } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { mealPlanService, shoppingService, userService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import { getWeekDates, toISODate, isSameDay, formatDuration } from '@/utils/date'
 import { normalizeText } from '@/utils/text'
+import { isToTaste } from '@/utils/quantity'
+import { classifyGroceryItem } from '@/utils/groceryCategory'
 import type { TranslationKey } from '@/i18n/translations'
+import type { MealSlot } from '@/constants/mealCategories'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import RecipePickerModal from '@/components/RecipePickerModal'
 import Logo from '@/components/common/Logo'
 
-const MEAL_SLOTS: { key: 'breakfast' | 'lunch' | 'snack' | 'dinner'; icon: typeof Clock; tint: string }[] = [
+const MEAL_SLOTS: { key: MealSlot; icon: typeof Clock; tint: string }[] = [
   { key: 'breakfast', icon: Clock, tint: 'bg-tint-sand' },
   { key: 'lunch', icon: Utensils, tint: 'bg-tint-sage' },
   { key: 'snack', icon: Cookie, tint: 'bg-tint-sand' },
   { key: 'dinner', icon: Moon, tint: 'bg-tint-clay' },
 ]
 
+// Tap water used in recipes is not something to buy
+const PANTRY_WATER = /^eau( (tiede|glacee|froide|chaude|bouillante))?$/
+
 export default function DashboardPage() {
   const { t, language } = useTranslation()
   const userId = useAuthStore((state) => state.session?.user.id)
-  const { recipeHasWarning } = useFoodWarnings()
+  const { recipeHasWarning, missingEquipment } = useFoodWarnings()
   const [username, setUsername] = useState('')
   const [weekPlan, setWeekPlan] = useState<any[]>([])
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [isLoading, setIsLoading] = useState(true)
-  const [pickerSlot, setPickerSlot] = useState<string | null>(null)
+  const [pickerSlot, setPickerSlot] = useState<MealSlot | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generated, setGenerated] = useState(false)
 
@@ -82,31 +88,39 @@ export default function DashboardPage() {
     try {
       const list = await shoppingService.getOrCreateActiveList(userId)
       const existingItems = await shoppingService.getListItems(list.id)
-      const existingByName = new Map(existingItems.map((i: any) => [normalizeText(i.food_name), i]))
+      // Same ingredient + same unit are summed; different units stay separate lines
+      const keyOf = (name: string, unit: string | null | undefined) => `${normalizeText(name)}|${(unit || '').trim()}`
+      const existingByKey = new Map(existingItems.map((i: any) => [keyOf(i.food_name, i.unit), i]))
 
-      const aggregated = new Map<string, { name: string; unit: string; qty: number }>()
+      const aggregated = new Map<string, { name: string; unit: string; qty: number | null }>()
       for (const entry of weekPlan) {
         for (const ing of entry.recipes?.recipe_ingredients || []) {
-          const key = normalizeText(ing.ingredient_name)
+          if (PANTRY_WATER.test(normalizeText(ing.ingredient_name))) continue
+          const key = keyOf(ing.ingredient_name, ing.unit)
+          const qty = isToTaste(ing.unit) ? null : Number(ing.quantity) || 0
           const prev = aggregated.get(key)
-          const qty = Number(ing.quantity) || 0
           if (prev) {
-            prev.qty += qty
+            if (prev.qty !== null && qty !== null) prev.qty += qty
           } else {
-            aggregated.set(key, { name: ing.ingredient_name, unit: ing.unit, qty })
+            aggregated.set(key, { name: ing.ingredient_name, unit: (ing.unit || '').trim(), qty })
           }
         }
       }
 
+      // Regenerating is idempotent: an existing line is raised to the needed amount, never added twice
       for (const [key, ing] of aggregated) {
-        const existing = existingByName.get(key)
+        const existing = existingByKey.get(key)
         if (existing) {
-          await shoppingService.updateItemQuantity(existing.id, (Number(existing.quantity) || 0) + ing.qty)
+          const current = Number(existing.quantity) || 0
+          if (ing.qty !== null && ing.qty > current) {
+            await shoppingService.updateItemQuantity(existing.id, ing.qty)
+          }
         } else {
           await shoppingService.addItemToList(list.id, {
             food_name: ing.name,
-            category: 'Autre',
-            quantity: ing.qty || 1,
+            category: classifyGroceryItem(ing.name),
+            quantity: ing.qty,
+            unit: ing.unit || null,
           })
         }
       }
@@ -168,7 +182,7 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <p className="text-xs text-ink-muted">{t(`dashboard.mealType.${key}` as TranslationKey)}</p>
                     <p className="font-display font-semibold text-ink truncate">{recipe.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                       <span className="text-xs text-ink-muted flex items-center gap-1">
                         <Clock size={11} />
                         {formatDuration(totalTime)}
@@ -177,6 +191,12 @@ export default function DashboardPage() {
                         <span title={t('warning.recipe')} className="text-xs text-danger flex items-center gap-1">
                           <AlertTriangle size={11} />
                           {t('warning.recipe')}
+                        </span>
+                      )}
+                      {missingEquipment(recipe).length > 0 && (
+                        <span title={t('warning.equipment')} className="text-xs text-accent flex items-center gap-1">
+                          <Wrench size={11} />
+                          {t('warning.equipment')}
                         </span>
                       )}
                     </div>
@@ -220,6 +240,7 @@ export default function DashboardPage() {
       {pickerSlot && (
         <RecipePickerModal
           title={t(`dashboard.mealType.${pickerSlot}` as TranslationKey)}
+          slot={pickerSlot}
           onClose={() => setPickerSlot(null)}
           onSelect={handleSelectRecipe}
         />

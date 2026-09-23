@@ -42,3 +42,11 @@ export function getRecipeWarnings(
 
   return { hasWarning: matchedIngredientIds.size > 0, matchedIngredientIds }
 }
+
+/** Equipment a recipe needs that the user said they don't have (none when "all equipment" is on). */
+export function getMissingEquipment(recipe: any, equipmentAll: boolean, userEquipment: Iterable<string>): string[] {
+  if (equipmentAll) return []
+  const owned = new Set(userEquipment)
+  const needed: string[] = Array.isArray(recipe?.equipment_needed) ? recipe.equipment_needed : []
+  return needed.filter((key) => !owned.has(key))
+}

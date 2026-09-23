@@ -34,7 +34,11 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/` },
+        options: {
+          redirectTo: `${window.location.origin}/`,
+          // Always show Google's account chooser instead of silently reusing the last account
+          queryParams: { prompt: 'select_account' },
+        },
       })
       if (error) throw error
     } catch (err: any) {

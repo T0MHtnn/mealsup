@@ -89,14 +89,69 @@ export const fridgeService = {
 
 // ============ RECIPES ============
 
+export interface RecipeInput {
+  title: string
+  description: string
+  prep_time_mins: number
+  cook_time_mins: number
+  servings: number
+  difficulty: number
+  tags: string[]
+  equipment_needed: string[]
+  instructions: string[]
+}
+
+export interface RecipeIngredientInput {
+  ingredient_name: string
+  quantity: number | null
+  unit: string
+}
+
+const replaceIngredients = async (recipeId: string, ingredients: RecipeIngredientInput[]) => {
+  const { error: deleteError } = await supabase.from('recipe_ingredients').delete().eq('recipe_id', recipeId)
+  if (deleteError) throw deleteError
+  if (ingredients.length === 0) return
+  const { error } = await supabase
+    .from('recipe_ingredients')
+    .insert(ingredients.map((ing) => ({ recipe_id: recipeId, ...ing })))
+  if (error) throw error
+}
+
 export const recipeService = {
+  // RLS returns the public recipes plus the user's own private ones
   getRecipes: async () => {
     const { data, error } = await supabase
       .from('recipes')
       .select('*, recipe_ingredients(*)')
-      .eq('visibility', 'public')
+      .order('title')
     if (error) throw error
     return data || []
+  },
+
+  /** User recipes are always private: only their author can see them. */
+  createRecipe: async (userId: string, recipe: RecipeInput, ingredients: RecipeIngredientInput[]) => {
+    const { data, error } = await supabase
+      .from('recipes')
+      .insert([{ ...recipe, created_by: userId, visibility: 'private' }])
+      .select('id')
+      .single()
+    if (error) throw error
+    await replaceIngredients(data.id, ingredients)
+    return data.id as string
+  },
+
+  updateRecipe: async (recipeId: string, recipe: RecipeInput, ingredients: RecipeIngredientInput[]) => {
+    const { error } = await supabase
+      .from('recipes')
+      .update({ ...recipe, updated_at: new Date().toISOString() })
+      .eq('id', recipeId)
+    if (error) throw error
+    await replaceIngredients(recipeId, ingredients)
+  },
+
+  deleteRecipe: async (recipeId: string) => {
+    const { error } = await supabase.from('recipes').delete().eq('id', recipeId)
+    if (error) throw error
   },
 
   getRecipeById: async (recipeId: string) => {
@@ -185,6 +240,14 @@ export const shoppingService = {
       .from('shopping_list_items')
       .delete()
       .eq('id', itemId)
+    if (error) throw error
+  },
+
+  clearList: async (listId: string) => {
+    const { error } = await supabase
+      .from('shopping_list_items')
+      .delete()
+      .eq('shopping_list_id', listId)
     if (error) throw error
   },
 
@@ -295,6 +358,15 @@ export const userService = {
     const { error } = await supabase
       .from('users')
       .upsert({ id: userId, email: userData.user?.email, ...preferences })
+    if (error) throw error
+  },
+}
+
+// ============ RETOURS UTILISATEURS ============
+
+export const feedbackService = {
+  send: async (userId: string, email: string | undefined, message: string) => {
+    const { error } = await supabase.from('feedback').insert([{ user_id: userId, email: email || null, message }])
     if (error) throw error
   },
 }

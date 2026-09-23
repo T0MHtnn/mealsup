@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, Heart, Clock, Users, Gauge, Utensils, Minus, Plus, CalendarPlus, AlertTriangle } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ChevronLeft, Heart, Clock, Users, Gauge, Utensils, Minus, Plus, CalendarPlus, AlertTriangle, Pencil, Trash2, Wrench } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { recipeService, favoriteService, mealPlanService, userService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
+import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import type { TranslationKey } from '@/i18n/translations'
 import type { DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
 import { getRecipeWarnings } from '@/utils/warnings'
 import { normalizeText } from '@/utils/text'
 import { formatDuration } from '@/utils/date'
+import { formatEuros } from '@/utils/prices'
+import { usePrices } from '@/hooks/usePrices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import DaySlotPickerModal from '@/components/DaySlotPickerModal'
 
@@ -17,6 +20,8 @@ export default function RecipeDetailPage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const userId = useAuthStore((state) => state.session?.user.id)
+  const { missingEquipment } = useFoodWarnings()
+  const { recipeCost } = usePrices()
 
   const [recipe, setRecipe] = useState<any>(null)
   const [isFavorite, setIsFavorite] = useState(false)
@@ -60,6 +65,23 @@ export default function RecipeDetailPage() {
     }
   }
 
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const handleDelete = async () => {
+    if (!id) return
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+    try {
+      await recipeService.deleteRecipe(id)
+      navigate('/recipes', { replace: true })
+    } catch (err) {
+      console.error('Delete recipe error:', err)
+      setConfirmDelete(false)
+    }
+  }
+
   const handleAddToPlan = async (date: string, mealType: string) => {
     if (!userId || !id) return
     try {
@@ -82,7 +104,10 @@ export default function RecipeDetailPage() {
   const baseServings = recipe.servings || 1
   const scale = servings / baseServings
 
-  const formatQuantity = (qty: number) => {
+  const isOwner = Boolean(userId) && recipe.created_by === userId
+
+  const formatQuantity = (qty: number | null) => {
+    if (qty == null) return ''
     const scaled = Math.round(qty * scale * 10) / 10
     return Number.isInteger(scaled) ? scaled : scaled.toFixed(1)
   }
@@ -153,7 +178,36 @@ export default function RecipeDetailPage() {
           </div>
         )}
 
+        {missingEquipment(recipe).length > 0 && (
+          <div className="flex items-start gap-2 p-3 bg-tint-sand border border-accent rounded-sm text-sm text-accent">
+            <Wrench size={16} className="shrink-0 mt-0.5" />
+            <span>
+              {t('warning.equipmentDetail', {
+                list: missingEquipment(recipe)
+                  .map((key) => t(`equipment.${key}` as TranslationKey))
+                  .join(', '),
+              })}
+            </span>
+          </div>
+        )}
+
         {recipe.description && <p className="text-sm text-ink-muted">{recipe.description}</p>}
+
+        {(() => {
+          const cost = recipeCost(recipe)
+          const shown = cost.perServing * servings
+          return (
+            <div className="bg-tint-sand rounded-sm px-3 py-2">
+              <p className="text-sm text-ink">
+                <span className="font-display font-semibold">{t('prices.estimatedCost')} :</span> ≈ {formatEuros(shown)}{' '}
+                <span className="text-ink-muted">
+                  ({t('prices.forPeople', { n: servings })}, ≈ {formatEuros(cost.perServing)}/{t('prices.perPerson')})
+                </span>
+              </p>
+              <p className="text-[11px] text-ink-muted mt-0.5">{t('prices.disclaimer')}</p>
+            </div>
+          )
+        })()}
 
         <div className="flex items-center justify-between bg-surface-200 border border-border rounded-md p-3">
           <span className="text-sm font-display font-semibold text-ink">
@@ -240,6 +294,27 @@ export default function RecipeDetailPage() {
           <CalendarPlus size={18} />
           {planAdded ? t('dashboard.addedToPlan') : t('dashboard.addToPlan')}
         </button>
+
+        {isOwner && (
+          <div className="flex gap-2">
+            <Link
+              to={`/recipes/${recipe.id}/edit`}
+              className="flex-1 py-2.5 rounded-full border border-border text-ink font-display font-semibold flex items-center justify-center gap-2 hover:bg-surface-200"
+            >
+              <Pencil size={16} />
+              {t('recipes.edit')}
+            </Link>
+            <button
+              onClick={handleDelete}
+              className={`flex-1 py-2.5 rounded-full border font-display font-semibold flex items-center justify-center gap-2 ${
+                confirmDelete ? 'bg-danger text-white border-danger' : 'border-border text-danger hover:bg-surface-200'
+              }`}
+            >
+              <Trash2 size={16} />
+              {confirmDelete ? t('recipes.deleteConfirm') : t('recipes.delete')}
+            </button>
+          </div>
+        )}
       </div>
 
       {showPlanPicker && (

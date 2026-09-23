@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS equipment JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS equipment_all BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+-- Enseigne habituelle, pour ajuster les prix ESTIMÉS (voir src/constants/prices.ts)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_store TEXT NOT NULL DEFAULT 'average';
 
 -- allergies / dietary_restrictions doivent être des tableaux JSON (pas '{}')
 UPDATE users SET allergies = '[]'::jsonb WHERE allergies IS NULL OR jsonb_typeof(allergies) <> 'array';
@@ -112,8 +114,10 @@ CREATE TABLE IF NOT EXISTS recipes (
 -- Équipement requis, ex: '["oven","stovetop"]'
 ALTER TABLE recipes ADD COLUMN IF NOT EXISTS equipment_needed JSONB NOT NULL DEFAULT '[]';
 
--- Le seed met à jour les recettes par titre
-CREATE UNIQUE INDEX IF NOT EXISTS recipes_title_key ON recipes (title);
+-- Recettes système (created_by NULL) : titre unique, le seed les met à jour par titre.
+-- Les recettes des utilisateurs peuvent reprendre un titre existant ("Mes crêpes"...).
+DROP INDEX IF EXISTS recipes_title_key;
+CREATE UNIQUE INDEX IF NOT EXISTS recipes_system_title_key ON recipes (title) WHERE created_by IS NULL;
 
 
 -- ============ CATALOGUE D'INGRÉDIENTS ============
@@ -253,6 +257,18 @@ ALTER TABLE purchase_history ADD COLUMN IF NOT EXISTS items JSONB;
 ALTER TABLE purchase_history ADD COLUMN IF NOT EXISTS date_purchased TIMESTAMPTZ NOT NULL DEFAULT now();
 
 
+-- ============ RETOURS UTILISATEURS (section Contact du profil) ============
+-- Lecture : Supabase > Table Editor > feedback (l'app ne permet que d'envoyer).
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  email TEXT,
+  message TEXT NOT NULL CHECK (char_length(message) BETWEEN 1 AND 5000),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
 -- ============ ROW LEVEL SECURITY ============
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -265,6 +281,7 @@ ALTER TABLE planned_meals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shopping_lists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shopping_list_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE purchase_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 
 -- Profil
 DROP POLICY IF EXISTS "Users manage their own profile" ON users;
@@ -280,39 +297,65 @@ CREATE POLICY "Users manage their own fridge items"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Recettes, ingrédients : lecture publique, écriture pour les connectés
+-- Recettes : les recettes système (seed) sont publiques et en lecture seule
+-- depuis l'app ; chaque utilisateur crée, modifie et supprime ses propres
+-- recettes, qui restent privées (invisibles pour les autres).
+-- (le seed s'exécute depuis le SQL Editor, qui n'est pas soumis au RLS)
+DROP POLICY IF EXISTS "Users can read public recipes" ON recipes;
+DROP POLICY IF EXISTS "Authenticated users can manage recipes" ON recipes;
+
 DROP POLICY IF EXISTS "Recipes are publicly readable" ON recipes;
 CREATE POLICY "Recipes are publicly readable"
   ON recipes FOR SELECT
   USING (visibility = 'public' OR created_by = auth.uid());
 
-DROP POLICY IF EXISTS "Authenticated users can manage recipes" ON recipes;
-CREATE POLICY "Authenticated users can manage recipes"
-  ON recipes FOR ALL
-  USING (auth.role() = 'authenticated')
-  WITH CHECK (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Users create their own recipes" ON recipes;
+CREATE POLICY "Users create their own recipes"
+  ON recipes FOR INSERT
+  WITH CHECK (created_by = auth.uid() AND visibility = 'private');
+
+DROP POLICY IF EXISTS "Users update their own recipes" ON recipes;
+CREATE POLICY "Users update their own recipes"
+  ON recipes FOR UPDATE
+  USING (created_by = auth.uid())
+  WITH CHECK (created_by = auth.uid() AND visibility = 'private');
+
+DROP POLICY IF EXISTS "Users delete their own recipes" ON recipes;
+CREATE POLICY "Users delete their own recipes"
+  ON recipes FOR DELETE
+  USING (created_by = auth.uid());
+
+-- Ingrédients des recettes : mêmes règles que la recette à laquelle ils appartiennent
+DROP POLICY IF EXISTS "Authenticated users can manage recipe ingredients" ON recipe_ingredients;
 
 DROP POLICY IF EXISTS "Recipe ingredients are publicly readable" ON recipe_ingredients;
 CREATE POLICY "Recipe ingredients are publicly readable"
   ON recipe_ingredients FOR SELECT
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM recipes r
+      WHERE r.id = recipe_ingredients.recipe_id
+        AND (r.visibility = 'public' OR r.created_by = auth.uid())
+    )
+  );
 
-DROP POLICY IF EXISTS "Authenticated users can manage recipe ingredients" ON recipe_ingredients;
-CREATE POLICY "Authenticated users can manage recipe ingredients"
+DROP POLICY IF EXISTS "Users manage ingredients of their own recipes" ON recipe_ingredients;
+CREATE POLICY "Users manage ingredients of their own recipes"
   ON recipe_ingredients FOR ALL
-  USING (auth.role() = 'authenticated')
-  WITH CHECK (auth.role() = 'authenticated');
+  USING (
+    EXISTS (SELECT 1 FROM recipes r WHERE r.id = recipe_ingredients.recipe_id AND r.created_by = auth.uid())
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM recipes r WHERE r.id = recipe_ingredients.recipe_id AND r.created_by = auth.uid())
+  );
+
+-- Catalogue d'ingrédients : lecture seule (alimenté par le trigger, qui passe outre le RLS)
+DROP POLICY IF EXISTS "Authenticated users can manage ingredients" ON ingredients;
 
 DROP POLICY IF EXISTS "Ingredients are publicly readable" ON ingredients;
 CREATE POLICY "Ingredients are publicly readable"
   ON ingredients FOR SELECT
   USING (true);
-
-DROP POLICY IF EXISTS "Authenticated users can manage ingredients" ON ingredients;
-CREATE POLICY "Authenticated users can manage ingredients"
-  ON ingredients FOR ALL
-  USING (auth.role() = 'authenticated')
-  WITH CHECK (auth.role() = 'authenticated');
 
 -- Favoris
 DROP POLICY IF EXISTS "Users manage their own favorites" ON favorite_recipes;
@@ -355,6 +398,13 @@ DROP POLICY IF EXISTS "Users manage their own purchase history" ON purchase_hist
 CREATE POLICY "Users manage their own purchase history"
   ON purchase_history FOR ALL
   USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+
+-- Retours : chacun peut envoyer un message en son nom, personne ne les relit depuis l'app
+DROP POLICY IF EXISTS "Users send feedback" ON feedback;
+CREATE POLICY "Users send feedback"
+  ON feedback FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 

@@ -52,6 +52,30 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* iOS Safari zoome automatiquement sur un champ dont la police fait moins de
+   16px : on force 16px sur mobile pour que l'écran ne bouge pas au focus. */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Champ date vide : Safari iOS n'affiche aucun placeholder */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 2.625rem;
+}
+
+/* Défilement horizontal sans barre visible (rangées de filtres) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 h1, h2, h3, h4, .font-display {
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }

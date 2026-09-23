@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Search, Heart, Clock, Utensils, SlidersHorizontal, ArrowUp, ArrowDown, ArrowUpDown, Check, AlertTriangle } from 'lucide-react'
+import { Search, Heart, Clock, Utensils, SlidersHorizontal, ArrowUp, ArrowDown, ArrowUpDown, Check, AlertTriangle, Plus, Wrench, PiggyBank } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { recipeService, favoriteService, userService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { EquipmentKey } from '@/constants/equipment'
 import type { DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
+import { MEAL_CATEGORIES, isRecipeInCategory, type MealCategory } from '@/constants/mealCategories'
+import type { TranslationKey } from '@/i18n/translations'
 import { normalizeText } from '@/utils/text'
-import { getRecipeWarnings } from '@/utils/warnings'
+import { getMissingEquipment, getRecipeWarnings } from '@/utils/warnings'
 import { formatDuration } from '@/utils/date'
+import { formatEuros } from '@/utils/prices'
+import { usePrices } from '@/hooks/usePrices'
+import { LOW_BUDGET_PER_SERVING } from '@/constants/prices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 
 const HERO_TINTS = ['bg-tint-sage', 'bg-tint-sand', 'bg-tint-clay']
@@ -24,7 +29,8 @@ type SortKey = 'default' | 'time' | 'difficulty'
 
 export default function RecipesPage() {
   const { t } = useTranslation()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { recipeCost } = usePrices()
   const userId = useAuthStore((state) => state.session?.user.id)
   const [recipes, setRecipes] = useState<any[]>([])
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
@@ -32,12 +38,33 @@ export default function RecipesPage() {
   const [dietaryRestrictions, setDietaryRestrictions] = useState<DietaryRestrictionKey[]>([])
   const [equipmentAll, setEquipmentAll] = useState(true)
   const [userEquipment, setUserEquipment] = useState<Set<EquipmentKey>>(new Set())
-  const [search, setSearch] = useState('')
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(searchParams.get('favorites') === 'true')
-  const [sortBy, setSortBy] = useState<SortKey>('default')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [showFilters, setShowFilters] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+
+  // Search, category, favorites and sort live in the URL, so that going back
+  // from a recipe restores the exact same filtered list.
+  const search = searchParams.get('q') ?? ''
+  const showFavoritesOnly = searchParams.get('favorites') === 'true'
+  const lowBudgetOnly = searchParams.get('budget') === 'low'
+  const categoryParam = searchParams.get('cat') as MealCategory | null
+  const category = categoryParam && MEAL_CATEGORIES.includes(categoryParam) ? categoryParam : null
+  const sortParam = searchParams.get('sort')
+  const sortBy: SortKey = sortParam === 'time' || sortParam === 'difficulty' ? sortParam : 'default'
+  const sortDir: 'asc' | 'desc' = searchParams.get('dir') === 'asc' ? 'asc' : 'desc'
+
+  const updateParams = (changes: Record<string, string | null>) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [key, value] of Object.entries(changes)) {
+          if (value) next.set(key, value)
+          else next.delete(key)
+        }
+        return next
+      },
+      { replace: true }
+    )
+  }
 
   useEffect(() => {
     if (!userId) return
@@ -85,12 +112,11 @@ export default function RecipesPage() {
 
   const selectSort = (option: SortKey) => {
     if (option === 'default') {
-      setSortBy('default')
+      updateParams({ sort: null, dir: null })
     } else if (sortBy === option) {
-      setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+      updateParams({ dir: sortDir === 'desc' ? 'asc' : null })
     } else {
-      setSortBy(option)
-      setSortDir('desc')
+      updateParams({ sort: option, dir: null })
     }
     setShowFilters(false)
   }
@@ -99,18 +125,16 @@ export default function RecipesPage() {
     const query = normalizeText(search.trim())
     return recipes.filter((recipe) => {
       if (showFavoritesOnly && !favoriteIds.has(recipe.id)) return false
+      if (category && !isRecipeInCategory(recipe, category)) return false
+      if (lowBudgetOnly && recipeCost(recipe).perServing > LOW_BUDGET_PER_SERVING) return false
 
-      if (!equipmentAll) {
-        const needed: string[] = recipe.equipment_needed || []
-        if (!needed.every((eq) => userEquipment.has(eq as EquipmentKey))) return false
-      }
 
       if (!query) return true
       const ingredientNames = (recipe.recipe_ingredients || []).map((i: any) => i.ingredient_name).join(' ')
       const haystack = normalizeText(`${recipe.title} ${(recipe.tags || []).join(' ')} ${ingredientNames}`)
       return haystack.includes(query)
     })
-  }, [recipes, search, showFavoritesOnly, favoriteIds, equipmentAll, userEquipment, excludedFoods])
+  }, [recipes, search, showFavoritesOnly, lowBudgetOnly, category, favoriteIds, recipeCost])
 
   const sorted = useMemo(() => {
     if (sortBy === 'default') return filtered
@@ -129,20 +153,47 @@ export default function RecipesPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('recipes.search')}
-          className="w-full pl-10 pr-4 py-2 border border-border rounded-full bg-surface-200 text-ink focus:ring-2 focus:ring-primary focus:border-transparent"
-        />
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => updateParams({ q: e.target.value })}
+            placeholder={t('recipes.search')}
+            className="w-full pl-10 pr-4 py-2 border border-border rounded-full bg-surface-200 text-ink focus:ring-2 focus:ring-primary focus:border-transparent"
+          />
+        </div>
+        <Link
+          to="/recipes/new"
+          aria-label={t('recipes.create')}
+          title={t('recipes.create')}
+          className="w-10 h-10 shrink-0 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary-strong"
+        >
+          <Plus size={20} />
+        </Link>
+      </div>
+
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4">
+        {[null, ...MEAL_CATEGORIES].map((cat) => {
+          const isActive = category === cat
+          return (
+            <button
+              key={cat ?? 'all'}
+              onClick={() => updateParams({ cat })}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium border ${
+                isActive ? 'bg-ink text-surface-100 border-ink' : 'bg-surface-200 text-ink-muted border-border'
+              }`}
+            >
+              {t((cat ? `recipes.category.${cat}` : 'recipes.category.all') as TranslationKey)}
+            </button>
+          )
+        })}
       </div>
 
       <div className="flex items-center gap-2">
         <button
-          onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+          onClick={() => updateParams({ favorites: showFavoritesOnly ? null : 'true' })}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${
             showFavoritesOnly
               ? 'bg-primary text-white border-primary'
@@ -151,6 +202,17 @@ export default function RecipesPage() {
         >
           <Heart size={14} fill={showFavoritesOnly ? 'currentColor' : 'none'} />
           {t('recipes.favoritesOnly')}
+        </button>
+
+        <button
+          onClick={() => updateParams({ budget: lowBudgetOnly ? null : 'low' })}
+          title={t('prices.lowBudgetHint', { max: formatEuros(LOW_BUDGET_PER_SERVING) })}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${
+            lowBudgetOnly ? 'bg-primary text-white border-primary' : 'bg-surface-200 text-ink-muted border-border'
+          }`}
+        >
+          <PiggyBank size={14} />
+          {t('prices.lowBudget')}
         </button>
 
         <div className="relative">
@@ -206,6 +268,7 @@ export default function RecipesPage() {
           {sorted.map((recipe) => {
             const isFav = favoriteIds.has(recipe.id)
             const warnings = getRecipeWarnings(recipe, excludedFoods, dietaryRestrictions)
+            const missing = getMissingEquipment(recipe, equipmentAll, userEquipment)
             return (
               <Link
                 key={recipe.id}
@@ -214,11 +277,29 @@ export default function RecipesPage() {
               >
                 <div className={`relative h-24 flex items-center justify-center ${heroTintFor(recipe)}`}>
                   <Utensils className="text-primary" size={26} strokeWidth={1.75} />
-                  {warnings.hasWarning && (
-                    <span className="absolute top-1.5 left-1.5 w-7 h-7 rounded-full bg-surface-200 flex items-center justify-center text-danger">
-                      <AlertTriangle size={14} />
+                  {recipe.created_by && recipe.created_by === userId && (
+                    <span className="absolute bottom-1.5 left-1.5 text-[10px] font-semibold text-white bg-accent px-2 py-0.5 rounded-full">
+                      {t('recipes.mine')}
                     </span>
                   )}
+                  <div className="absolute top-1.5 left-1.5 flex gap-1">
+                    {warnings.hasWarning && (
+                      <span
+                        title={t('warning.recipe')}
+                        className="w-7 h-7 rounded-full bg-surface-200 flex items-center justify-center text-danger"
+                      >
+                        <AlertTriangle size={14} />
+                      </span>
+                    )}
+                    {missing.length > 0 && (
+                      <span
+                        title={t('warning.equipment')}
+                        className="w-7 h-7 rounded-full bg-surface-200 flex items-center justify-center text-accent"
+                      >
+                        <Wrench size={13} />
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={(e) => toggleFavorite(e, recipe.id)}
                     aria-label="Toggle favorite"
@@ -229,9 +310,12 @@ export default function RecipesPage() {
                 </div>
                 <div className="p-2.5 flex-1 flex flex-col">
                   <h3 className="font-display font-semibold text-sm text-ink line-clamp-2">{recipe.title}</h3>
-                  <div className="mt-auto pt-1.5 flex items-center gap-1 text-xs text-ink-muted">
-                    <Clock size={11} />
-                    {formatDuration((recipe.prep_time_mins ?? 0) + (recipe.cook_time_mins ?? 0))}
+                  <div className="mt-auto pt-1.5 flex flex-wrap items-center justify-between gap-x-1 text-xs text-ink-muted">
+                    <span className="flex items-center gap-1">
+                      <Clock size={11} />
+                      {formatDuration((recipe.prep_time_mins ?? 0) + (recipe.cook_time_mins ?? 0))}
+                    </span>
+                    <span title={t('prices.disclaimer')}>≈ {formatEuros(recipeCost(recipe).perServing)}/{t('prices.perPerson')}</span>
                   </div>
                 </div>
               </Link>
