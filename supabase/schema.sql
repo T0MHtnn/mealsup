@@ -30,6 +30,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS equipment_all BOOLEAN NOT NULL DEFAUL
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 -- Enseigne habituelle, pour ajuster les prix ESTIMÉS (voir src/constants/prices.ts)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_store TEXT NOT NULL DEFAULT 'average';
+-- Alertes de péremption (notifications push) : activées ? déjà proposées une fois ?
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_asked BOOLEAN NOT NULL DEFAULT false;
 
 -- allergies / dietary_restrictions doivent être des tableaux JSON (pas '{}')
 UPDATE users SET allergies = '[]'::jsonb WHERE allergies IS NULL OR jsonb_typeof(allergies) <> 'array';
@@ -90,6 +93,8 @@ CREATE TABLE IF NOT EXISTS fridge_items (
 
 ALTER TABLE fridge_items ALTER COLUMN category SET DEFAULT 'Autre';
 UPDATE fridge_items SET category = 'Autre' WHERE category IS NULL;
+-- Jour où l'alerte de péremption a été envoyée (une seule alerte par aliment)
+ALTER TABLE fridge_items ADD COLUMN IF NOT EXISTS expiry_notified_on DATE;
 
 
 -- ============ RECETTES ============
@@ -213,6 +218,34 @@ CREATE TABLE IF NOT EXISTS planned_meals (
 
 CREATE UNIQUE INDEX IF NOT EXISTS planned_meals_slot_key ON planned_meals (user_id, meal_date, meal_type);
 
+-- Nombre de portions prévues (NULL = portions de base de la recette)
+ALTER TABLE planned_meals ADD COLUMN IF NOT EXISTS servings INTEGER CHECK (servings IS NULL OR servings BETWEEN 1 AND 50);
+
+
+-- ============ AVIS SUR LES RECETTES (note + note perso) ============
+
+CREATE TABLE IF NOT EXISTS recipe_ratings (
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  rating SMALLINT CHECK (rating IS NULL OR rating BETWEEN 1 AND 5),
+  note TEXT CHECK (note IS NULL OR char_length(note) <= 2000),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, recipe_id)
+);
+
+
+-- ============ ABONNEMENTS AUX NOTIFICATIONS PUSH ============
+-- Un abonnement par appareil (téléphone, ordinateur) où l'utilisateur a accepté.
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 
 -- ============ COURSES ============
 
@@ -282,6 +315,8 @@ ALTER TABLE shopping_lists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shopping_list_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE purchase_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recipe_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Profil
 DROP POLICY IF EXISTS "Users manage their own profile" ON users;
@@ -400,6 +435,20 @@ CREATE POLICY "Users manage their own purchase history"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
+
+-- Avis : chacun gère les siens
+DROP POLICY IF EXISTS "Users manage their own ratings" ON recipe_ratings;
+CREATE POLICY "Users manage their own ratings"
+  ON recipe_ratings FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Abonnements push : chacun gère ceux de ses appareils (l'envoi se fait côté serveur)
+DROP POLICY IF EXISTS "Users manage their own push subscriptions" ON push_subscriptions;
+CREATE POLICY "Users manage their own push subscriptions"
+  ON push_subscriptions FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 -- Retours : chacun peut envoyer un message en son nom, personne ne les relit depuis l'app
 DROP POLICY IF EXISTS "Users send feedback" ON feedback;

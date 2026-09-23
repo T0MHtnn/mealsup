@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, Plus, X, Lock, Check } from 'lucide-react'
+import { ChevronLeft, Plus, X, Lock, Check, Link2, Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { recipeService, type RecipeIngredientInput } from '@/services/supabaseClient'
+import { recipeService, supabase, type RecipeIngredientInput } from '@/services/supabaseClient'
+import { parseIngredientLine } from '@/utils/recipeImport'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { TranslationKey } from '@/i18n/translations'
 import { EQUIPMENT_LIST, type EquipmentKey } from '@/constants/equipment'
@@ -52,6 +53,9 @@ export default function RecipeEditorPage() {
   const [steps, setSteps] = useState<string[]>([''])
   // Tags other than the meal categories are kept untouched when editing
   const [otherTags, setOtherTags] = useState<string[]>([])
+  const [importUrl, setImportUrl] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+  const [importStatus, setImportStatus] = useState<'idle' | 'done' | 'error'>('idle')
 
   useEffect(() => {
     if (!id || !userId) return
@@ -97,6 +101,33 @@ export default function RecipeEditorPage() {
 
   const updateStep = (index: number, value: string) => {
     setSteps((prev) => prev.map((step, i) => (i === index ? value : step)))
+  }
+
+  /** Fill the form from a recipe page (the server function reads its structured data). */
+  const handleImport = async () => {
+    const url = importUrl.trim()
+    if (!url) return
+    setIsImporting(true)
+    setImportStatus('idle')
+    try {
+      const { data, error } = await supabase.functions.invoke('import-recipe', { body: { url } })
+      if (error || !data || data.error) throw error ?? new Error(data?.error)
+      const source = new URL(data.source || url).hostname.replace(/^www\./, '')
+      setTitle(data.title || '')
+      setDescription(`${data.description ? `${data.description} ` : ''}(${t('import.source')} : ${source})`)
+      if (data.prep_time_mins) setPrep(String(data.prep_time_mins))
+      if (data.cook_time_mins) setCook(String(data.cook_time_mins))
+      if (data.servings) setServings(String(data.servings))
+      const parsed: IngredientRow[] = (data.ingredients || []).map((line: string) => parseIngredientLine(line))
+      setIngredients(parsed.length > 0 ? parsed : [{ ...EMPTY_INGREDIENT }])
+      setSteps(data.steps?.length ? data.steps : [''])
+      setImportStatus('done')
+    } catch (err) {
+      console.error('Recipe import error:', err)
+      setImportStatus('error')
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   const handleSave = async () => {
@@ -168,6 +199,37 @@ export default function RecipeEditorPage() {
         <Lock size={13} className="shrink-0" />
         {t('editor.privateNote')}
       </p>
+
+      {!isEdit && (
+        <section className="bg-tint-sage rounded-md p-3 space-y-2">
+          <p className="text-sm font-display font-semibold text-ink flex items-center gap-2">
+            <Link2 size={16} className="text-primary" />
+            {t('import.title')}
+          </p>
+          <p className="text-xs text-ink-muted">{t('import.hint')}</p>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              inputMode="url"
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              placeholder="https://www.marmiton.org/recettes/…"
+              className={`${inputClass} flex-1 min-w-0`}
+            />
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={isImporting || !importUrl.trim()}
+              className="px-4 bg-primary text-white rounded-sm font-display font-semibold disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+            >
+              {isImporting && <Loader2 size={15} className="animate-spin" />}
+              {t('import.button')}
+            </button>
+          </div>
+          {importStatus === 'done' && <p className="text-xs text-primary">{t('import.done')}</p>}
+          {importStatus === 'error' && <p className="text-xs text-danger">{t('import.error')}</p>}
+        </section>
+      )}
 
       <section className="space-y-1.5">
         <label className="text-sm font-display font-semibold text-ink">{t('editor.name')}</label>

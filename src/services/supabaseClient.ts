@@ -68,6 +68,16 @@ export const fridgeService = {
     return data || []
   },
 
+  addItems: async (userId: string, items: any[]) => {
+    if (items.length === 0) return []
+    const { data, error } = await supabase
+      .from('fridge_items')
+      .insert(items.map((item) => ({ user_id: userId, ...item })))
+      .select()
+    if (error) throw error
+    return data || []
+  },
+
   deleteItem: async (itemId: string) => {
     const { error } = await supabase
       .from('fridge_items')
@@ -398,10 +408,11 @@ export const mealPlanService = {
     return data || []
   },
 
-  setMeal: async (userId: string, mealDate: string, mealType: string, recipeId: string) => {
+  /** servings = null -> the recipe's own number of servings */
+  setMeal: async (userId: string, mealDate: string, mealType: string, recipeId: string, servings: number | null = null) => {
     const { data, error } = await supabase
       .from('planned_meals')
-      .upsert([{ user_id: userId, meal_date: mealDate, meal_type: mealType, recipe_id: recipeId }], {
+      .upsert([{ user_id: userId, meal_date: mealDate, meal_type: mealType, recipe_id: recipeId, servings }], {
         onConflict: 'user_id,meal_date,meal_type',
       })
       .select('*, recipes(*, recipe_ingredients(*))')
@@ -409,8 +420,71 @@ export const mealPlanService = {
     return data?.[0]
   },
 
+  setMeals: async (userId: string, meals: { meal_date: string; meal_type: string; recipe_id: string }[]) => {
+    if (meals.length === 0) return []
+    const { data, error } = await supabase
+      .from('planned_meals')
+      .upsert(meals.map((m) => ({ user_id: userId, servings: null, ...m })), { onConflict: 'user_id,meal_date,meal_type' })
+      .select('*, recipes(*, recipe_ingredients(*))')
+    if (error) throw error
+    return data || []
+  },
+
+  updateServings: async (id: string, servings: number) => {
+    const { error } = await supabase.from('planned_meals').update({ servings }).eq('id', id)
+    if (error) throw error
+  },
+
   removeMeal: async (id: string) => {
     const { error } = await supabase.from('planned_meals').delete().eq('id', id)
+    if (error) throw error
+  },
+}
+
+// ============ AVIS SUR LES RECETTES ============
+
+export interface RecipeRating {
+  recipe_id: string
+  rating: number | null
+  note: string | null
+}
+
+export const ratingService = {
+  getMine: async (userId: string): Promise<RecipeRating[]> => {
+    const { data, error } = await supabase
+      .from('recipe_ratings')
+      .select('recipe_id, rating, note')
+      .eq('user_id', userId)
+    if (error) throw error
+    return data || []
+  },
+
+  save: async (userId: string, recipeId: string, rating: number | null, note: string | null) => {
+    const { error } = await supabase
+      .from('recipe_ratings')
+      .upsert({ user_id: userId, recipe_id: recipeId, rating, note, updated_at: new Date().toISOString() })
+    if (error) throw error
+  },
+}
+
+// ============ NOTIFICATIONS PUSH ============
+
+export const pushService = {
+  saveSubscription: async (userId: string, subscription: PushSubscriptionJSON) => {
+    const { error } = await supabase.from('push_subscriptions').upsert(
+      {
+        user_id: userId,
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys?.p256dh,
+        auth: subscription.keys?.auth,
+      },
+      { onConflict: 'endpoint' }
+    )
+    if (error) throw error
+  },
+
+  deleteSubscription: async (endpoint: string) => {
+    const { error } = await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint)
     if (error) throw error
   },
 }

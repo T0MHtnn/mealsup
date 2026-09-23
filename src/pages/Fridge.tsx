@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, X, AlertTriangle } from 'lucide-react'
+import { Plus, X, AlertTriangle, ChefHat } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useFridgeStore } from '@/store/fridgeStore'
 import { fridgeService } from '@/services/supabaseClient'
@@ -123,6 +124,16 @@ export default function FridgePage() {
             {t('fridge.submit')}
           </button>
         </form>
+      )}
+
+      {items.length > 0 && (
+        <Link
+          to="/recipes?fridge=1"
+          className="w-full flex items-center justify-center gap-2 py-2.5 border border-primary text-primary rounded-full font-display font-semibold hover:bg-tint-sage"
+        >
+          <ChefHat size={18} />
+          {t('fridgeMatch.whatToCook')}
+        </Link>
       )}
 
       {items.length > 0 && (

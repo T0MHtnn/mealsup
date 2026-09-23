@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Minus, Trash2, Check, ChevronDown, History } from 'lucide-react'
+import { Plus, Minus, Trash2, Check, ChevronDown, History, Refrigerator, WifiOff } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-import { shoppingService } from '@/services/supabaseClient'
+import { shoppingService, fridgeService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import { GROCERY_CATEGORIES, GROCERY_CATALOG, type GroceryCategory } from '@/constants/groceryCatalog'
@@ -10,6 +11,8 @@ import { classifyGroceryItem, itemCategory } from '@/utils/groceryCategory'
 import { formatAmount } from '@/utils/quantity'
 import { formatEuros } from '@/utils/prices'
 import { usePrices } from '@/hooks/usePrices'
+import { ingredientKey } from '@/utils/ingredients'
+import { isFridgeFood, suggestedExpiry } from '@/utils/shelfLife'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import Modal from '@/components/common/Modal'
 import FoodWarningBadge from '@/components/common/FoodWarningBadge'
@@ -41,6 +44,29 @@ function QuantityInput({ value, onCommit }: { value: number; onCommit: (quantity
   )
 }
 
+// Offline support: the last loaded list is kept on the device, and items ticked
+// without network are queued and sent when the connection comes back.
+type PendingOp = { id: string; is_purchased: boolean }
+const cacheKey = (userId: string) => `mealsup.shopping.${userId}`
+const queueKey = (userId: string) => `mealsup.shopping.queue.${userId}`
+
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // storage full or unavailable: offline mode simply won't have the latest data
+  }
+}
+
 export default function ShoppingPage() {
   const { t, language } = useTranslation()
   const userId = useAuthStore((state) => state.session?.user.id)
@@ -57,18 +83,65 @@ export default function ShoppingPage() {
   const [history, setHistory] = useState<any[]>([])
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' && !navigator.onLine)
+  const [fridgeKeys, setFridgeKeys] = useState<Set<string>>(new Set())
+  const [fridgeMessage, setFridgeMessage] = useState<string | null>(null)
+
+  const loadList = async (uid: string) => {
+    const activeList = await shoppingService.getOrCreateActiveList(uid)
+    const listItems = await shoppingService.getListItems(activeList.id)
+    setList(activeList)
+    setItems(listItems)
+    setIsOffline(false)
+  }
 
   useEffect(() => {
     if (!userId) return
-    shoppingService
-      .getOrCreateActiveList(userId)
-      .then(async (activeList) => {
-        setList(activeList)
-        const listItems = await shoppingService.getListItems(activeList.id)
-        setItems(listItems)
+    loadList(userId)
+      .catch((err) => {
+        // No network: show the list saved on this device
+        console.warn('Shopping load failed, using the offline copy:', err)
+        const cached = readJson<{ list: any; items: any[] } | null>(cacheKey(userId), null)
+        if (cached) {
+          setList(cached.list)
+          setItems(cached.items)
+        }
+        setIsOffline(true)
       })
-      .catch((err) => console.error('Shopping load error:', err))
       .finally(() => setIsLoading(false))
+    fridgeService
+      .getFridgeItems(userId)
+      .then((fridge) => setFridgeKeys(new Set(fridge.map((f: any) => ingredientKey(f.food_name)))))
+      .catch(() => undefined)
+  }, [userId])
+
+  // Keep an offline copy of the list up to date
+  useEffect(() => {
+    if (userId && list) writeJson(cacheKey(userId), { list, items })
+  }, [userId, list, items])
+
+  // Back online: send the ticks made offline, then reload
+  useEffect(() => {
+    if (!userId) return
+    const flush = async () => {
+      const queue = readJson<PendingOp[]>(queueKey(userId), [])
+      try {
+        for (const op of queue) await shoppingService.toggleItemChecked(op.id, op.is_purchased)
+        writeJson(queueKey(userId), [])
+        await loadList(userId)
+      } catch (err) {
+        console.warn('Offline sync failed, will retry:', err)
+      }
+    }
+    const goOffline = () => setIsOffline(true)
+    window.addEventListener('online', flush)
+    window.addEventListener('offline', goOffline)
+    if (navigator.onLine && readJson<PendingOp[]>(queueKey(userId), []).length > 0) flush()
+    return () => {
+      window.removeEventListener('online', flush)
+      window.removeEventListener('offline', goOffline)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
   const openHistory = () => {
@@ -119,11 +192,19 @@ export default function ShoppingPage() {
   }
 
   const toggleChecked = async (item: any) => {
-    const updated = items.map((i) => (i.id === item.id ? { ...i, is_purchased: !i.is_purchased } : i))
-    setItems(updated)
-    await shoppingService
-      .toggleItemChecked(item.id, !item.is_purchased)
-      .catch((err) => console.error('Toggle error:', err))
+    const next = !item.is_purchased
+    setItems(items.map((i) => (i.id === item.id ? { ...i, is_purchased: next } : i)))
+    const enqueue = () => {
+      if (!userId) return
+      const queue = readJson<PendingOp[]>(queueKey(userId), []).filter((op) => op.id !== item.id)
+      writeJson(queueKey(userId), [...queue, { id: item.id, is_purchased: next }])
+      setIsOffline(true)
+    }
+    if (!navigator.onLine) return enqueue()
+    await shoppingService.toggleItemChecked(item.id, next).catch((err) => {
+      console.warn('Toggle failed, queued for later:', err)
+      enqueue()
+    })
   }
 
   const handleRemove = async (itemId: string) => {
@@ -134,6 +215,29 @@ export default function ShoppingPage() {
   const handleCompleteShopping = async () => {
     if (!userId || !list || items.length === 0) return
     await shoppingService.completeList(userId, list.id, items)
+
+    // What was bought goes to the fridge (ticked items, or everything if nothing was ticked),
+    // with a suggested expiry date. Existing fridge items are kept as they are.
+    const bought = items.some((i) => i.is_purchased) ? items.filter((i) => i.is_purchased) : items
+    const today = new Date()
+    const toFridge = bought
+      .filter((i) => isFridgeFood(i.food_name))
+      .map((i) => ({
+        food_name: i.food_name,
+        category: itemCategory(i),
+        quantity: formatAmount(i.quantity, i.unit) || null,
+        unit: null,
+        added_date: today.toISOString(),
+        expiry_date: suggestedExpiry(i.food_name, today),
+        is_available: true,
+      }))
+    try {
+      await fridgeService.addItems(userId, toFridge)
+      setFridgeMessage(toFridge.length > 0 ? t('shopping.addedToFridge', { n: toFridge.length }) : null)
+    } catch (err) {
+      console.error('Add to fridge error:', err)
+    }
+
     const newList = await shoppingService.getOrCreateActiveList(userId)
     setList(newList)
     setItems([])
@@ -176,6 +280,23 @@ export default function ShoppingPage() {
 
   return (
     <div className="p-4 space-y-4">
+      {isOffline && (
+        <p className="flex items-start gap-2 text-sm text-ink bg-tint-sand rounded-md px-3 py-2">
+          <WifiOff size={16} className="shrink-0 mt-0.5 text-accent" />
+          {t('offline.shopping')}
+        </p>
+      )}
+      {fridgeMessage && (
+        <p className="flex items-center justify-between gap-2 text-sm text-ink bg-tint-sage rounded-md px-3 py-2">
+          <span className="flex items-center gap-2">
+            <Refrigerator size={16} className="text-primary shrink-0" />
+            {fridgeMessage}
+          </span>
+          <Link to="/fridge" className="text-primary font-semibold shrink-0">
+            {t('shopping.seeFridge')}
+          </Link>
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <div className="inline-flex rounded-full border border-border p-0.5 flex-1">
           <button
@@ -341,6 +462,16 @@ export default function ShoppingPage() {
                           {item.food_name}
                         </span>
                         <FoodWarningBadge flag={foodFlag(item.food_name)} />
+                        {fridgeKeys.has(ingredientKey(item.food_name)) && (
+                          <span
+                            title={t('shopping.inFridge')}
+                            aria-label={t('shopping.inFridge')}
+                            className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary bg-tint-sage px-1.5 py-0.5 rounded-full shrink-0"
+                          >
+                            <Refrigerator size={11} />
+                            {t('shopping.inFridgeShort')}
+                          </span>
+                        )}
                         <span className="flex flex-col items-end shrink-0">
                           {formatAmount(item.quantity, item.unit) && (
                             <span className="text-xs font-semibold text-primary">
@@ -370,7 +501,8 @@ export default function ShoppingPage() {
 
           <button
             onClick={handleCompleteShopping}
-            className="w-full py-2.5 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong flex items-center justify-center gap-2"
+            disabled={isOffline}
+            className="w-full py-2.5 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong flex items-center justify-center gap-2 disabled:opacity-40"
           >
             <Check size={18} />
             {t('shopping.complete')}
@@ -378,8 +510,9 @@ export default function ShoppingPage() {
 
           <button
             onClick={handleClearList}
+            disabled={isOffline}
             onBlur={() => setConfirmClear(false)}
-            className={`w-full py-2.5 rounded-full font-display font-semibold flex items-center justify-center gap-2 border ${
+            className={`w-full py-2.5 rounded-full font-display font-semibold flex items-center justify-center gap-2 border disabled:opacity-40 ${
               confirmClear ? 'bg-danger text-white border-danger' : 'border-border text-danger hover:bg-surface-200'
             }`}
           >

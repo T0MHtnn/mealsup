@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, Heart, Clock, Users, Gauge, Utensils, Minus, Plus, CalendarPlus, AlertTriangle, Pencil, Trash2, Wrench } from 'lucide-react'
+import { ChevronLeft, Heart, Clock, Users, Gauge, Utensils, Minus, Plus, CalendarPlus, AlertTriangle, Pencil, Trash2, Wrench, ChefHat } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { recipeService, favoriteService, mealPlanService, userService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -14,6 +14,8 @@ import { formatEuros } from '@/utils/prices'
 import { usePrices } from '@/hooks/usePrices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import DaySlotPickerModal from '@/components/DaySlotPickerModal'
+import RecipeRating from '@/components/RecipeRating'
+import { estimateRecipeNutrition } from '@/utils/nutrition'
 
 export default function RecipeDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -85,7 +87,9 @@ export default function RecipeDetailPage() {
   const handleAddToPlan = async (date: string, mealType: string) => {
     if (!userId || !id) return
     try {
-      await mealPlanService.setMeal(userId, date, mealType, id)
+      // Remember the servings chosen on this page (null = the recipe's own number)
+      const plannedServings = recipe && servings !== (recipe.servings || 1) ? servings : null
+      await mealPlanService.setMeal(userId, date, mealType, id, plannedServings)
       setPlanAdded(true)
     } catch (err) {
       console.error('Add to plan error:', err)
@@ -209,6 +213,30 @@ export default function RecipeDetailPage() {
           )
         })()}
 
+        {(() => {
+          const n = estimateRecipeNutrition(recipe).perServing
+          const cells = [
+            { label: t('nutrition.kcal'), value: `${Math.round(n.kcal)}` },
+            { label: t('nutrition.protein'), value: `${Math.round(n.protein)} g` },
+            { label: t('nutrition.carbs'), value: `${Math.round(n.carbs)} g` },
+            { label: t('nutrition.fat'), value: `${Math.round(n.fat)} g` },
+          ]
+          return (
+            <div className="bg-surface-200 border border-border rounded-sm px-3 py-2">
+              <p className="text-sm font-display font-semibold text-ink">{t('nutrition.perServing')}</p>
+              <div className="grid grid-cols-4 gap-1 mt-1.5 text-center">
+                {cells.map((c) => (
+                  <div key={c.label}>
+                    <p className="text-sm font-display font-bold text-ink">≈ {c.value}</p>
+                    <p className="text-[11px] text-ink-muted">{c.label}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-ink-muted mt-1.5">{t('nutrition.disclaimer')}</p>
+            </div>
+          )
+        })()}
+
         <div className="flex items-center justify-between bg-surface-200 border border-border rounded-md p-3">
           <span className="text-sm font-display font-semibold text-ink">
             {t('recipes.servingsFor')} {servings} {t('recipes.people')}
@@ -287,6 +315,16 @@ export default function RecipeDetailPage() {
           <p className="text-sm text-ink-muted text-center py-6">{t('recipes.noSteps')}</p>
         )}
 
+        {Array.isArray(recipe.instructions) && recipe.instructions.length > 0 && (
+          <Link
+            to={`/recipes/${recipe.id}/cook?servings=${servings}`}
+            className="w-full py-3 bg-accent text-white rounded-full font-display font-semibold flex items-center justify-center gap-2 hover:opacity-90"
+          >
+            <ChefHat size={18} />
+            {t('cook.start')}
+          </Link>
+        )}
+
         <button
           onClick={() => setShowPlanPicker(true)}
           className="w-full py-3 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong flex items-center justify-center gap-2"
@@ -315,6 +353,10 @@ export default function RecipeDetailPage() {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="px-4 pb-6">
+        <RecipeRating recipeId={recipe.id} />
       </div>
 
       {showPlanPicker && (

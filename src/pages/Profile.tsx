@@ -12,6 +12,7 @@ import { normalizeText } from '@/utils/text'
 import LanguageSwitch from '@/components/common/LanguageSwitch'
 import EditProfileModal from '@/components/EditProfileModal'
 import Modal from '@/components/common/Modal'
+import NotificationSettings from '@/components/NotificationSettings'
 
 const THEME_OPTIONS: { value: Theme; icon: typeof Sun }[] = [
   { value: 'light', icon: Sun },
@@ -259,6 +260,8 @@ export default function ProfilePage() {
           {t('profile.manageEquipment')}
         </button>
       </div>
+
+      <NotificationSettings />
 
       {showEquipmentModal && (
         <Modal title={t('profile.equipment')} onClose={() => setShowEquipmentModal(false)}>

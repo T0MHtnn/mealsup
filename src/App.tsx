@@ -11,6 +11,7 @@ import FridgePage from '@/pages/Fridge'
 import RecipesPage from '@/pages/Recipes'
 import RecipeDetailPage from '@/pages/RecipeDetail'
 import RecipeEditorPage from '@/pages/RecipeEditor'
+import CookModePage from '@/pages/CookMode'
 import ShoppingPage from '@/pages/Shopping'
 import ProfilePage from '@/pages/Profile'
 
@@ -42,7 +43,10 @@ function App() {
             <Route path="*" element={<Navigate to="/login" replace />} />
           </>
         ) : (
-          <Route element={<MainLayout />}>
+          <>
+            {/* Full screen, without the navigation bar */}
+            <Route path="/recipes/:id/cook" element={<CookModePage />} />
+            <Route element={<MainLayout />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/fridge" element={<FridgePage />} />
             <Route path="/recipes" element={<RecipesPage />} />
@@ -52,7 +56,8 @@ function App() {
             <Route path="/shopping" element={<ShoppingPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
+            </Route>
+          </>
         )}
       </Routes>
     </Router>

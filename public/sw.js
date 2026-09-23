@@ -74,3 +74,39 @@ async function staleWhileRevalidate(request) {
     .catch(() => cached)
   return cached || network
 }
+
+// ---- Notifications push (alertes de péremption) ----
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    data = { body: event.data ? event.data.text() : '' }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'MealsUp', {
+      body: data.body || '',
+      icon: '/brand/icon.png',
+      badge: '/brand/icon.png',
+      tag: data.tag,
+      data: { url: data.url || '/' },
+    })
+  )
+})
+
+// Tap on a notification: open (or focus) the app on the suggested page
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = (event.notification.data && event.notification.data.url) || '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      for (const client of windows) {
+        if ('focus' in client) {
+          client.navigate(url)
+          return client.focus()
+        }
+      }
+      return self.clients.openWindow(url)
+    })
+  )
+})

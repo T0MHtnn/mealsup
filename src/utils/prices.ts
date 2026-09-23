@@ -3,7 +3,7 @@ import { CATEGORY_FALLBACK_PRICE, PRICE_TABLE, type PriceEntry } from '@/constan
 import { classifyGroceryItem, simplify } from '@/utils/groceryCategory'
 import { formatAmount, isToTaste } from '@/utils/quantity'
 
-interface Amount {
+export interface Amount {
   kg?: number
   L?: number
   count?: number
@@ -33,7 +33,7 @@ const MEASURES: Record<string, { kg?: number; L?: number; counted?: boolean }> =
   dose: { kg: 0.03, counted: true },
 }
 
-function toAmount(quantity: number, unit: string): Amount {
+export function toAmount(quantity: number, unit: string): Amount {
   const u = unit.trim()
   if (COUNT_UNITS.has(u)) return { count: quantity }
   const m = MEASURES[u] ?? MEASURES[u.toLowerCase()]
@@ -64,20 +64,36 @@ const PATTERNS = PRICE_TABLE.map((entry) => ({
   patterns: entry.keywords.map((kw) => new RegExp(`(^| )${kw}(s|x)?( |$)`)),
 }))
 
-const entryCache = new Map<string, PriceEntry>()
+const matchCache = new Map<string, { entry: PriceEntry; keyword: string | null }>()
 
-/** Price entry for a product or ingredient name (falls back to an average for its aisle). */
-function entryFor(name: string): PriceEntry {
-  const cached = entryCache.get(name)
+function match(name: string) {
+  const cached = matchCache.get(name)
   if (cached) return cached
   const simple = simplify(name)
-  let found = PATTERNS.find(({ patterns }) => patterns.some((re) => re.test(simple)))?.entry
-  if (!found) {
-    const fallback = CATEGORY_FALLBACK_PRICE[classifyGroceryItem(name)]
-    found = fallback ? { keywords: [], price: fallback, per: 'kg' } : { keywords: [], price: 4, per: 'unit' }
+  let result: { entry: PriceEntry; keyword: string | null } | null = null
+  for (const { entry, patterns } of PATTERNS) {
+    const index = patterns.findIndex((re) => re.test(simple))
+    if (index >= 0) {
+      result = { entry, keyword: entry.keywords[index] }
+      break
+    }
   }
-  entryCache.set(name, found)
-  return found
+  if (!result) {
+    const fallback = CATEGORY_FALLBACK_PRICE[classifyGroceryItem(name)]
+    result = { entry: fallback ? { keywords: [], price: fallback, per: 'kg' } : { keywords: [], price: 4, per: 'unit' }, keyword: null }
+  }
+  matchCache.set(name, result)
+  return result
+}
+
+/** Price entry for a product or ingredient name (falls back to an average for its aisle). */
+export function entryFor(name: string): PriceEntry {
+  return match(name).entry
+}
+
+/** The exact keyword of the table recognised in a name ("Tomates bien mûres" -> "tomate"), if any. */
+export function matchedKeyword(name: string): string | null {
+  return match(name).keyword
 }
 
 /** Usual pack when an item is added to the list "per unit" (no measure). */
@@ -125,4 +141,14 @@ export function estimateRecipeCost(recipe: any, factor: number): { total: number
 export function formatEuros(value: number): string {
   if (value > 0 && value < 0.1) return '< 0,10 €'
   return `${value.toFixed(2).replace('.', ',')} €`
+}
+
+/** Weight in kg of an ingredient amount (liquids ~1 kg/L), using the average weight of one piece. */
+export function amountToKg(name: string, quantity: number | null | undefined, unit?: string | null): number {
+  if (isToTaste(unit) || !quantity || quantity <= 0) return 0
+  const amount = toAmount(quantity, unit || '')
+  const weight = amount.kg ?? amount.L
+  if (weight !== undefined) return weight
+  const entry = entryFor(name)
+  return (amount.count ?? 0) * (entry.unitKg ?? 0.1)
 }

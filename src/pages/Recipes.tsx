@@ -1,8 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Heart, Clock, Utensils, SlidersHorizontal, ArrowUp, ArrowDown, ArrowUpDown, Check, AlertTriangle, Plus, Wrench, PiggyBank } from 'lucide-react'
+import {
+  Heart,
+  Clock,
+  Utensils,
+  SlidersHorizontal,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  Check,
+  AlertTriangle,
+  Plus,
+  Wrench,
+  PiggyBank,
+  Refrigerator,
+  Star,
+} from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { recipeService, favoriteService, userService } from '@/services/supabaseClient'
+import { recipeService, favoriteService, userService, fridgeService, ratingService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { EquipmentKey } from '@/constants/equipment'
 import type { DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
@@ -14,6 +29,9 @@ import { formatDuration } from '@/utils/date'
 import { formatEuros } from '@/utils/prices'
 import { usePrices } from '@/hooks/usePrices'
 import { LOW_BUDGET_PER_SERVING } from '@/constants/prices'
+import { HIGH_PROTEIN_PER_SERVING, LIGHT_KCAL_PER_SERVING } from '@/constants/nutrition'
+import { recipeNutritionPerServing } from '@/utils/nutrition'
+import { ingredientKey, recipeIngredientKeys } from '@/utils/ingredients'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import SearchInput from '@/components/common/SearchInput'
 
@@ -26,7 +44,13 @@ function heroTintFor(recipe: any) {
   return HERO_TINTS[recipe.title.length % HERO_TINTS.length]
 }
 
-type SortKey = 'default' | 'time' | 'difficulty'
+type SortKey = 'default' | 'time' | 'difficulty' | 'rating'
+const SORT_OPTIONS: SortKey[] = ['default', 'time', 'difficulty', 'rating']
+
+const chipClass = (active: boolean) =>
+  `shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${
+    active ? 'bg-primary text-white border-primary' : 'bg-surface-200 text-ink-muted border-border'
+  }`
 
 export default function RecipesPage() {
   const { t } = useTranslation()
@@ -35,6 +59,8 @@ export default function RecipesPage() {
   const userId = useAuthStore((state) => state.session?.user.id)
   const [recipes, setRecipes] = useState<any[]>([])
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  const [ratings, setRatings] = useState<Map<string, number>>(new Map())
+  const [fridgeKeys, setFridgeKeys] = useState<Set<string>>(new Set())
   const [excludedFoods, setExcludedFoods] = useState<string[]>([])
   const [dietaryRestrictions, setDietaryRestrictions] = useState<DietaryRestrictionKey[]>([])
   const [equipmentAll, setEquipmentAll] = useState(true)
@@ -42,16 +68,20 @@ export default function RecipesPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Search, category, favorites and sort live in the URL, so that going back
-  // from a recipe restores the exact same filtered list.
+  // Search, filters and sort live in the URL, so that going back from a recipe
+  // restores the exact same filtered list.
   const search = searchParams.get('q') ?? ''
   const showFavoritesOnly = searchParams.get('favorites') === 'true'
   const lowBudgetOnly = searchParams.get('budget') === 'low'
+  const fridgeMode = searchParams.get('fridge') === '1'
+  const highProteinOnly = searchParams.get('protein') === '1'
+  const lightOnly = searchParams.get('light') === '1'
   const categoryParam = searchParams.get('cat') as MealCategory | null
   const category = categoryParam && MEAL_CATEGORIES.includes(categoryParam) ? categoryParam : null
-  const sortParam = searchParams.get('sort')
-  const sortBy: SortKey = sortParam === 'time' || sortParam === 'difficulty' ? sortParam : 'default'
+  const sortParam = searchParams.get('sort') as SortKey | null
+  const sortBy: SortKey = sortParam && SORT_OPTIONS.includes(sortParam) ? sortParam : 'default'
   const sortDir: 'asc' | 'desc' = searchParams.get('dir') === 'asc' ? 'asc' : 'desc'
+  const activeFilterCount = [sortBy !== 'default', highProteinOnly, lightOnly].filter(Boolean).length
 
   const updateParams = (changes: Record<string, string | null>) => {
     setSearchParams(
@@ -73,10 +103,14 @@ export default function RecipesPage() {
       recipeService.getRecipes(),
       favoriteService.getFavoriteIds(userId),
       userService.getUserPreferences(userId),
+      ratingService.getMine(userId).catch(() => []),
+      fridgeService.getFridgeItems(userId).catch(() => []),
     ])
-      .then(([allRecipes, favIds, prefs]) => {
+      .then(([allRecipes, favIds, prefs, myRatings, fridgeItems]) => {
         setRecipes(allRecipes)
         setFavoriteIds(new Set(favIds))
+        setRatings(new Map(myRatings.filter((r) => r.rating).map((r) => [r.recipe_id, r.rating as number])))
+        setFridgeKeys(new Set(fridgeItems.map((item: any) => ingredientKey(item.food_name))))
         setExcludedFoods(
           (Array.isArray(prefs?.allergies) ? prefs.allergies : [])
             .map((s: string) => normalizeText(s))
@@ -122,33 +156,53 @@ export default function RecipesPage() {
     setShowFilters(false)
   }
 
+  /** How many of the recipe's ingredients (staples aside) are already in the fridge. */
+  const fridgeMatch = useMemo(() => {
+    const map = new Map<string, { have: number; total: number }>()
+    for (const recipe of recipes) {
+      const keys = recipeIngredientKeys(recipe)
+      let have = 0
+      keys.forEach((key) => fridgeKeys.has(key) && have++)
+      map.set(recipe.id, { have, total: keys.size })
+    }
+    return map
+  }, [recipes, fridgeKeys])
+
   const filtered = useMemo(() => {
     const query = normalizeText(search.trim())
     return recipes.filter((recipe) => {
       if (showFavoritesOnly && !favoriteIds.has(recipe.id)) return false
       if (category && !isRecipeInCategory(recipe, category)) return false
       if (lowBudgetOnly && recipeCost(recipe).perServing > LOW_BUDGET_PER_SERVING) return false
-
+      if (fridgeMode && !(fridgeMatch.get(recipe.id)?.have ?? 0)) return false
+      if (highProteinOnly && recipeNutritionPerServing(recipe).protein < HIGH_PROTEIN_PER_SERVING) return false
+      if (lightOnly && recipeNutritionPerServing(recipe).kcal > LIGHT_KCAL_PER_SERVING) return false
 
       if (!query) return true
       const ingredientNames = (recipe.recipe_ingredients || []).map((i: any) => i.ingredient_name).join(' ')
       const haystack = normalizeText(`${recipe.title} ${(recipe.tags || []).join(' ')} ${ingredientNames}`)
       return haystack.includes(query)
     })
-  }, [recipes, search, showFavoritesOnly, lowBudgetOnly, category, favoriteIds, recipeCost])
+  }, [recipes, search, showFavoritesOnly, lowBudgetOnly, fridgeMode, highProteinOnly, lightOnly, category, favoriteIds, recipeCost, fridgeMatch])
 
   const sorted = useMemo(() => {
+    // "What can I cook with my fridge?": most ingredients already at home first
+    if (fridgeMode && sortBy === 'default') {
+      const score = (r: any) => {
+        const m = fridgeMatch.get(r.id)
+        return m && m.total ? m.have + m.have / m.total : 0
+      }
+      return [...filtered].sort((a, b) => score(b) - score(a))
+    }
     if (sortBy === 'default') return filtered
-    const withKey = filtered.map((recipe) => ({
-      recipe,
-      key:
-        sortBy === 'time'
-          ? (recipe.prep_time_mins ?? 0) + (recipe.cook_time_mins ?? 0)
-          : recipe.difficulty ?? 0,
-    }))
-    withKey.sort((a, b) => (sortDir === 'asc' ? a.key - b.key : b.key - a.key))
-    return withKey.map((w) => w.recipe)
-  }, [filtered, sortBy, sortDir])
+    const keyOf = (recipe: any) =>
+      sortBy === 'time'
+        ? (recipe.prep_time_mins ?? 0) + (recipe.cook_time_mins ?? 0)
+        : sortBy === 'rating'
+          ? ratings.get(recipe.id) ?? 0
+          : recipe.difficulty ?? 0
+    return [...filtered].sort((a, b) => (sortDir === 'asc' ? keyOf(a) - keyOf(b) : keyOf(b) - keyOf(a)))
+  }, [filtered, sortBy, sortDir, fridgeMode, fridgeMatch, ratings])
 
   if (isLoading) return <LoadingSpinner />
 
@@ -188,75 +242,99 @@ export default function RecipesPage() {
         })}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
         <button
           onClick={() => updateParams({ favorites: showFavoritesOnly ? null : 'true' })}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${
-            showFavoritesOnly
-              ? 'bg-primary text-white border-primary'
-              : 'bg-surface-200 text-ink-muted border-border'
-          }`}
+          className={chipClass(showFavoritesOnly)}
         >
           <Heart size={14} fill={showFavoritesOnly ? 'currentColor' : 'none'} />
           {t('recipes.favoritesOnly')}
         </button>
 
         <button
+          onClick={() => updateParams({ fridge: fridgeMode ? null : '1' })}
+          title={t('fridgeMatch.hint')}
+          className={chipClass(fridgeMode)}
+        >
+          <Refrigerator size={14} />
+          {t('fridgeMatch.filter')}
+        </button>
+
+        <button
           onClick={() => updateParams({ budget: lowBudgetOnly ? null : 'low' })}
           title={t('prices.lowBudgetHint', { max: formatEuros(LOW_BUDGET_PER_SERVING) })}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${
-            lowBudgetOnly ? 'bg-primary text-white border-primary' : 'bg-surface-200 text-ink-muted border-border'
-          }`}
+          className={chipClass(lowBudgetOnly)}
         >
           <PiggyBank size={14} />
           {t('prices.lowBudget')}
         </button>
 
-        <div className="relative">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${
-              sortBy !== 'default'
-                ? 'bg-primary text-white border-primary'
-                : 'bg-surface-200 text-ink-muted border-border'
-            }`}
-          >
-            <SlidersHorizontal size={14} />
-            {t('recipes.filters')}
-          </button>
-
-          {showFilters && (
-            <div className="absolute z-10 mt-2 w-60 bg-surface-200 border border-border rounded-md shadow-lg p-2">
-              <p className="text-xs font-display font-semibold text-ink-muted px-2 py-1">{t('recipes.sortBy')}</p>
-              {(['default', 'time', 'difficulty'] as const).map((option) => {
-                const isActive = sortBy === option
-                return (
-                  <button
-                    key={option}
-                    onClick={() => selectSort(option)}
-                    className="w-full flex items-center justify-between px-2 py-2 rounded-sm text-sm text-ink hover:bg-surface-100"
-                  >
-                    <span>{t(`recipes.sort.${option}` as const)}</span>
-                    <span className="flex items-center gap-1.5">
-                      {option !== 'default' &&
-                        (isActive ? (
-                          sortDir === 'desc' ? (
-                            <ArrowDown size={14} className="text-primary" />
-                          ) : (
-                            <ArrowUp size={14} className="text-primary" />
-                          )
-                        ) : (
-                          <ArrowUpDown size={14} className="text-ink-muted" />
-                        ))}
-                      {option === 'default' && isActive && <Check size={14} className="text-primary" />}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        <button onClick={() => setShowFilters(!showFilters)} className={chipClass(activeFilterCount > 0)}>
+          <SlidersHorizontal size={14} />
+          {t('recipes.filters')}
+          {activeFilterCount > 0 && ` (${activeFilterCount})`}
+        </button>
       </div>
+
+      {showFilters && (
+        <div className="bg-surface-200 border border-border rounded-md shadow-sm p-2 space-y-2">
+          <div>
+            <p className="text-xs font-display font-semibold text-ink-muted px-2 py-1">{t('recipes.sortBy')}</p>
+            {SORT_OPTIONS.map((option) => {
+              const isActive = sortBy === option
+              return (
+                <button
+                  key={option}
+                  onClick={() => selectSort(option)}
+                  className="w-full flex items-center justify-between px-2 py-2 rounded-sm text-sm text-ink hover:bg-surface-100"
+                >
+                  <span>{t(`recipes.sort.${option}` as TranslationKey)}</span>
+                  <span className="flex items-center gap-1.5">
+                    {option !== 'default' &&
+                      (isActive ? (
+                        sortDir === 'desc' ? (
+                          <ArrowDown size={14} className="text-primary" />
+                        ) : (
+                          <ArrowUp size={14} className="text-primary" />
+                        )
+                      ) : (
+                        <ArrowUpDown size={14} className="text-ink-muted" />
+                      ))}
+                    {option === 'default' && isActive && <Check size={14} className="text-primary" />}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="border-t border-border pt-2">
+            <p className="text-xs font-display font-semibold text-ink-muted px-2 py-1">{t('nutrition.filters')}</p>
+            {[
+              { active: highProteinOnly, param: 'protein', label: t('nutrition.highProtein', { min: HIGH_PROTEIN_PER_SERVING }) },
+              { active: lightOnly, param: 'light', label: t('nutrition.light', { max: LIGHT_KCAL_PER_SERVING }) },
+            ].map(({ active, param, label }) => (
+              <button
+                key={param}
+                onClick={() => updateParams({ [param]: active ? null : '1' })}
+                className="w-full flex items-center justify-between px-2 py-2 rounded-sm text-sm text-ink hover:bg-surface-100"
+              >
+                <span>{label}</span>
+                <span
+                  className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center ${
+                    active ? 'bg-primary border-primary' : 'border-border'
+                  }`}
+                >
+                  {active && <Check size={11} className="text-white" />}
+                </span>
+              </button>
+            ))}
+            <p className="text-[11px] text-ink-muted px-2 pt-1">{t('nutrition.disclaimer')}</p>
+          </div>
+        </div>
+      )}
+
+      {fridgeMode && fridgeKeys.size === 0 && (
+        <p className="text-sm text-ink-muted bg-tint-sand rounded-md px-3 py-2">{t('fridgeMatch.emptyFridge')}</p>
+      )}
 
       {sorted.length === 0 ? (
         <p className="text-center text-ink-muted text-sm py-8">{t('recipes.none')}</p>
@@ -266,6 +344,8 @@ export default function RecipesPage() {
             const isFav = favoriteIds.has(recipe.id)
             const warnings = getRecipeWarnings(recipe, excludedFoods, dietaryRestrictions)
             const missing = getMissingEquipment(recipe, equipmentAll, userEquipment)
+            const myRating = ratings.get(recipe.id)
+            const match = fridgeMatch.get(recipe.id)
             return (
               <Link
                 key={recipe.id}
@@ -277,6 +357,15 @@ export default function RecipesPage() {
                   {recipe.created_by && recipe.created_by === userId && (
                     <span className="absolute bottom-1.5 left-1.5 text-[10px] font-semibold text-white bg-accent px-2 py-0.5 rounded-full">
                       {t('recipes.mine')}
+                    </span>
+                  )}
+                  {fridgeMode && match && match.total > 0 && (
+                    <span
+                      title={t('fridgeMatch.badge', { have: match.have, total: match.total })}
+                      className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-surface-200 px-2 py-0.5 rounded-full"
+                    >
+                      <Refrigerator size={11} />
+                      {match.have}/{match.total}
                     </span>
                   )}
                   <div className="absolute top-1.5 left-1.5 flex gap-1">
@@ -307,6 +396,12 @@ export default function RecipesPage() {
                 </div>
                 <div className="p-2.5 flex-1 flex flex-col">
                   <h3 className="font-display font-semibold text-sm text-ink line-clamp-2">{recipe.title}</h3>
+                  {myRating && (
+                    <span className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] text-accent font-semibold">
+                      <Star size={11} fill="currentColor" />
+                      {myRating}/5
+                    </span>
+                  )}
                   <div className="mt-auto pt-1.5 flex flex-wrap items-center justify-between gap-x-1 text-xs text-ink-muted">
                     <span className="flex items-center gap-1">
                       <Clock size={11} />
