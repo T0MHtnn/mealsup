@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Clock, AlertTriangle, Heart, Wrench } from 'lucide-react'
+import { Clock, AlertTriangle, Heart, Wrench } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { recipeService, favoriteService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -8,6 +8,7 @@ import { normalizeText } from '@/utils/text'
 import { formatDuration } from '@/utils/date'
 import { SLOT_CATEGORIES, isRecipeInCategory, type MealSlot } from '@/constants/mealCategories'
 import Modal from '@/components/common/Modal'
+import SearchInput from '@/components/common/SearchInput'
 
 interface RecipePickerModalProps {
   title: string
@@ -53,17 +54,14 @@ export default function RecipePickerModal({ title, slot, onClose, onSelect }: Re
   return (
     <Modal title={title} onClose={onClose}>
       <div className="flex items-center gap-2 mb-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" size={16} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('recipes.search')}
-            autoFocus
-            className="w-full pl-9 pr-3 py-2 border border-border rounded-full bg-surface-100 text-ink text-sm"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={t('recipes.search')}
+          autoFocus
+          surface="surface-100"
+          className="flex-1"
+        />
         <button
           onClick={() => setFavoritesOnly(!favoritesOnly)}
           aria-pressed={favoritesOnly}

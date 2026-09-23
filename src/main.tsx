@@ -9,13 +9,28 @@ import './styles/globals.css'
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sw.js')
+      // Never serve sw.js itself from the HTTP cache, so a new deployment is detected
+      .register('/sw.js', { updateViaCache: 'none' })
       .then((registration) => {
-        console.log('✅ Service Worker registered:', registration)
+        // An installed iOS app is resumed, not reloaded: check for a new version
+        // each time it comes back to the foreground
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') registration.update().catch(() => undefined)
+        })
       })
       .catch((error) => {
-        console.error('❌ Service Worker registration failed:', error)
+        console.error('Service Worker registration failed:', error)
       })
+  })
+
+  // A new version took over: reload once so the screen shows it
+  // (not on the very first install, when there was no previous version)
+  const hadController = Boolean(navigator.serviceWorker.controller)
+  let reloading = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading || !hadController) return
+    reloading = true
+    window.location.reload()
   })
 }
 

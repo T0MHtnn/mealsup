@@ -1,67 +1,76 @@
-const CACHE_NAME = 'menu-app-v1'
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-]
+// Service worker MealsUp
+//
+// - Pages (index.html) : réseau d'abord, pour toujours charger la dernière
+//   version déployée ; le cache ne sert que hors ligne.
+// - /assets/* : fichiers générés par Vite avec un hash dans leur nom (un nouveau
+//   déploiement = de nouveaux noms), donc on peut les garder en cache sans risque.
+// - Autres fichiers du site (icônes, manifest) : cache, rafraîchi en arrière-plan.
+// - Les appels à Supabase (autre domaine) ne passent jamais par le cache.
+//
+// Changer CACHE_NAME n'est plus nécessaire à chaque déploiement.
+const CACHE_NAME = 'mealsup-v2'
 
-// Install event - cache resources
 self.addEventListener('install', (event) => {
+  // La nouvelle version prend la main tout de suite, sans attendre la fermeture de l'app
+  self.skipWaiting()
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('Opened cache')
-      return cache.addAll(urlsToCache)
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(['/', '/manifest.json']).catch(() => undefined))
   )
 })
 
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME]
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName)
-          }
-        })
-      )
-    })
+    caches
+      .keys()
+      .then((names) => Promise.all(names.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))))
+      .then(() => self.clients.claim())
   )
 })
 
-// Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Cache hit - return response
-      if (response) {
-        return response
-      }
+  const { request } = event
+  if (request.method !== 'GET') return
 
-      return fetch(event.request)
-        .then((response) => {
-          // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response
-          }
+  const url = new URL(request.url)
+  if (url.origin !== self.location.origin) return
 
-          // Clone the response
-          const responseToCache = response.clone()
-
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache)
-          })
-
-          return response
-        })
-        .catch(() => {
-          // Return offline page or cached response
-          return caches.match('/index.html')
-        })
-    })
-  )
+  if (request.mode === 'navigate') {
+    event.respondWith(networkFirst(request))
+  } else if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(cacheFirst(request))
+  } else {
+    event.respondWith(staleWhileRevalidate(request))
+  }
 })
+
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE_NAME)
+  try {
+    const response = await fetch(request, { cache: 'no-store' })
+    if (response.ok) cache.put('/', response.clone())
+    return response
+  } catch {
+    return (await cache.match('/')) || Response.error()
+  }
+}
+
+async function cacheFirst(request) {
+  const cache = await caches.open(CACHE_NAME)
+  const cached = await cache.match(request)
+  if (cached) return cached
+  const response = await fetch(request)
+  if (response.ok) cache.put(request, response.clone())
+  return response
+}
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE_NAME)
+  const cached = await cache.match(request)
+  const network = fetch(request)
+    .then((response) => {
+      if (response.ok) cache.put(request, response.clone())
+      return response
+    })
+    .catch(() => cached)
+  return cached || network
+}

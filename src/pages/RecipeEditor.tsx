@@ -15,7 +15,10 @@ interface IngredientRow {
   unit: string
 }
 
-const EMPTY_INGREDIENT: IngredientRow = { name: '', quantity: '', unit: '' }
+// Units used across the recipes; '' = counted items ("3 œufs") shown as "unité"
+const UNIT_OPTIONS = ['', 'g', 'kg', 'ml', 'cl', 'L', 'c.à.s', 'c.à.c', 'pincée', 'gousse', 'tranche', 'branche', 'feuille', 'bouquet', 'sachet', 'rouleau', 'à goût']
+
+const EMPTY_INGREDIENT: IngredientRow = { name: '', quantity: '', unit: 'g' }
 const CATEGORY_TAGS: string[] = Object.values(MEAL_CATEGORY_TAG)
 
 const inputClass =
@@ -279,37 +282,54 @@ export default function RecipeEditorPage() {
           <p className="text-xs text-ink-muted">{t('editor.ingredientsHint')}</p>
         </div>
         {ingredients.map((row, i) => (
-          <div key={i} className="flex items-center gap-1.5">
-            <input
-              type="text"
-              value={row.name}
-              onChange={(e) => updateIngredient(i, 'name', e.target.value)}
-              placeholder={t('editor.ingredientPlaceholder')}
-              className={`${inputClass} flex-1 min-w-0`}
-            />
-            <input
-              type="text"
-              inputMode="decimal"
-              value={row.quantity}
-              onChange={(e) => updateIngredient(i, 'quantity', e.target.value)}
-              placeholder={t('editor.quantityPlaceholder')}
-              className={`${inputClass} w-16 shrink-0`}
-            />
-            <input
-              type="text"
-              value={row.unit}
-              onChange={(e) => updateIngredient(i, 'unit', e.target.value)}
-              placeholder={t('editor.unitPlaceholder')}
-              className={`${inputClass} w-24 shrink-0`}
-            />
-            <button
-              type="button"
-              onClick={() => setIngredients((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : [{ ...EMPTY_INGREDIENT }]))}
-              aria-label={t('editor.remove')}
-              className="p-1 text-ink-muted hover:text-danger shrink-0"
-            >
-              <X size={16} />
-            </button>
+          <div key={i} className="border border-border rounded-sm p-2 space-y-1.5 bg-surface-100">
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={row.name}
+                onChange={(e) => updateIngredient(i, 'name', e.target.value)}
+                placeholder={t('editor.ingredientPlaceholder')}
+                aria-label={t('editor.ingredientName')}
+                className={`${inputClass} flex-1 min-w-0`}
+              />
+              <button
+                type="button"
+                onClick={() => setIngredients((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : [{ ...EMPTY_INGREDIENT }]))}
+                aria-label={t('editor.remove')}
+                className="p-1.5 text-ink-muted hover:text-danger shrink-0"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pr-9">
+              <label className="space-y-0.5">
+                <span className="block text-[11px] font-semibold text-ink-muted">{t('editor.quantity')}</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={row.quantity}
+                  onChange={(e) => updateIngredient(i, 'quantity', e.target.value)}
+                  placeholder={t('editor.quantityPlaceholder')}
+                  className={inputClass}
+                />
+              </label>
+              <label className="space-y-0.5">
+                <span className="block text-[11px] font-semibold text-ink-muted">{t('editor.unit')}</span>
+                <select
+                  value={row.unit}
+                  onChange={(e) => updateIngredient(i, 'unit', e.target.value)}
+                  className={inputClass}
+                >
+                  {/* A unit saved earlier that is not in the list stays selectable */}
+                  {!UNIT_OPTIONS.includes(row.unit) && <option value={row.unit}>{row.unit}</option>}
+                  {UNIT_OPTIONS.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit === '' ? t('editor.unitNone') : unit === 'à goût' ? t('editor.unitToTaste') : unit}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
         ))}
         <button

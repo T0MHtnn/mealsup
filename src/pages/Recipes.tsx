@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Search, Heart, Clock, Utensils, SlidersHorizontal, ArrowUp, ArrowDown, ArrowUpDown, Check, AlertTriangle, Plus, Wrench, PiggyBank } from 'lucide-react'
+import { Heart, Clock, Utensils, SlidersHorizontal, ArrowUp, ArrowDown, ArrowUpDown, Check, AlertTriangle, Plus, Wrench, PiggyBank } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { recipeService, favoriteService, userService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -15,6 +15,7 @@ import { formatEuros } from '@/utils/prices'
 import { usePrices } from '@/hooks/usePrices'
 import { LOW_BUDGET_PER_SERVING } from '@/constants/prices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
+import SearchInput from '@/components/common/SearchInput'
 
 const HERO_TINTS = ['bg-tint-sage', 'bg-tint-sand', 'bg-tint-clay']
 
@@ -154,16 +155,12 @@ export default function RecipesPage() {
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => updateParams({ q: e.target.value })}
-            placeholder={t('recipes.search')}
-            className="w-full pl-10 pr-4 py-2 border border-border rounded-full bg-surface-200 text-ink focus:ring-2 focus:ring-primary focus:border-transparent"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={(value) => updateParams({ q: value })}
+          placeholder={t('recipes.search')}
+          className="flex-1"
+        />
         <Link
           to="/recipes/new"
           aria-label={t('recipes.create')}

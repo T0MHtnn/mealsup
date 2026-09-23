@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, X, AlertTriangle, Search } from 'lucide-react'
+import { Plus, X, AlertTriangle } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useFridgeStore } from '@/store/fridgeStore'
 import { fridgeService } from '@/services/supabaseClient'
@@ -8,6 +8,7 @@ import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import { normalizeText } from '@/utils/text'
 import { classifyGroceryItem } from '@/utils/groceryCategory'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
+import SearchInput from '@/components/common/SearchInput'
 import FoodWarningBadge from '@/components/common/FoodWarningBadge'
 
 export default function FridgePage() {
@@ -125,16 +126,7 @@ export default function FridgePage() {
       )}
 
       {items.length > 0 && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('fridge.search')}
-            className="w-full pl-10 pr-4 py-2 border border-border rounded-full bg-surface-200 text-ink focus:ring-2 focus:ring-primary focus:border-transparent"
-          />
-        </div>
+        <SearchInput value={search} onChange={setSearch} placeholder={t('fridge.search')} />
       )}
 
       {items.length === 0 ? (
