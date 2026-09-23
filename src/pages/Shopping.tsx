@@ -225,8 +225,9 @@ export default function ShoppingPage() {
       .map((i) => ({
         food_name: i.food_name,
         category: itemCategory(i),
-        quantity: formatAmount(i.quantity, i.unit) || null,
-        unit: null,
+        // number + unit ("500" + "g"); "à goût" lines have no quantity
+        quantity: i.quantity != null && Number(i.quantity) > 0 ? String(i.quantity) : null,
+        unit: i.quantity != null && Number(i.quantity) > 0 ? i.unit || null : null,
         added_date: today.toISOString(),
         expiry_date: suggestedExpiry(i.food_name, today),
         is_available: true,

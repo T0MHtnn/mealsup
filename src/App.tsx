@@ -1,24 +1,25 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useAuthStore } from '@/store/authStore'
 import { useUiStore } from '@/store/uiStore'
 import { userService } from '@/services/supabaseClient'
 
-// Pages
+// Pages: the first screens are in the main bundle, the others are downloaded
+// only when opened (smaller app to load on the phone).
 import LoginPage from '@/pages/Login'
-import SignupPage from '@/pages/Signup'
 import DashboardPage from '@/pages/Dashboard'
-import FridgePage from '@/pages/Fridge'
-import RecipesPage from '@/pages/Recipes'
-import RecipeDetailPage from '@/pages/RecipeDetail'
-import RecipeEditorPage from '@/pages/RecipeEditor'
-import CookModePage from '@/pages/CookMode'
-import AdminUsersPage from '@/pages/admin/AdminUsers'
-import AdminFeedbacksPage from '@/pages/admin/AdminFeedbacks'
-import AdminProfilePage from '@/pages/admin/AdminProfile'
-import ShoppingPage from '@/pages/Shopping'
-import ProfilePage from '@/pages/Profile'
+const SignupPage = lazy(() => import('@/pages/Signup'))
+const FridgePage = lazy(() => import('@/pages/Fridge'))
+const RecipesPage = lazy(() => import('@/pages/Recipes'))
+const RecipeDetailPage = lazy(() => import('@/pages/RecipeDetail'))
+const RecipeEditorPage = lazy(() => import('@/pages/RecipeEditor'))
+const CookModePage = lazy(() => import('@/pages/CookMode'))
+const ShoppingPage = lazy(() => import('@/pages/Shopping'))
+const ProfilePage = lazy(() => import('@/pages/Profile'))
+const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsers'))
+const AdminFeedbacksPage = lazy(() => import('@/pages/admin/AdminFeedbacks'))
+const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfile'))
 
 // Layout
 import MainLayout from '@/components/layout/MainLayout'
@@ -64,6 +65,7 @@ function App() {
 
   return (
     <Router>
+      <Suspense fallback={<LoadingSpinner />}>
       <Routes>
         {!session ? (
           <>
@@ -98,6 +100,7 @@ function App() {
           )
         )}
       </Routes>
+      </Suspense>
     </Router>
   )
 }

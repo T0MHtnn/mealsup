@@ -46,3 +46,13 @@ function unitLabel(unit: string, quantity: number): string {
 export function isToTaste(unit?: string | null) {
   return (unit || '').trim() === TO_TASTE
 }
+
+/**
+ * Fridge quantity: a number + unit ("3 unités", "500 g"). Items saved before
+ * quantities became numeric may hold free text ("1 paquet"): shown as is.
+ */
+export function formatFridgeQuantity(quantity: string | number | null | undefined, unit?: string | null): string {
+  if (quantity === null || quantity === undefined || quantity === '') return ''
+  const n = typeof quantity === 'number' ? quantity : Number(String(quantity).replace(',', '.'))
+  return Number.isFinite(n) ? formatAmount(n, unit) : String(quantity)
+}

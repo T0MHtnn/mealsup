@@ -1,8 +1,10 @@
+import { Suspense } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Home, Search, Refrigerator, ShoppingCart, User, Users, MessageSquare, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { TranslationKey } from '@/i18n/translations'
 import Logo from '@/components/common/Logo'
+import LoadingSpinner from '@/components/common/LoadingSpinner'
 
 type Tab = { to: string; labelKey: TranslationKey; icon: typeof Home; end?: boolean }
 
@@ -44,7 +46,9 @@ export default function MainLayout({ admin = false }: { admin?: boolean }) {
         )}
 
         <main className="flex-1 overflow-auto pb-16">
-          <Outlet />
+          <Suspense fallback={<LoadingSpinner />}>
+            <Outlet />
+          </Suspense>
         </main>
 
         <nav className="absolute bottom-0 left-0 right-0 bg-surface-200 border-t border-border flex justify-around items-center h-16 shadow-[0_-1px_4px_rgba(0,0,0,0.05)]">

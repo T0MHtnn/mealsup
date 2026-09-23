@@ -10,10 +10,14 @@ import { normalizeText } from '@/utils/text'
 import { classifyGroceryItem } from '@/utils/groceryCategory'
 import { ingredientKey } from '@/utils/ingredients'
 import { suggestedExpiry } from '@/utils/shelfLife'
+import { formatFridgeQuantity } from '@/utils/quantity'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import SearchInput from '@/components/common/SearchInput'
 import FoodWarningBadge from '@/components/common/FoodWarningBadge'
 import FoodAutocomplete, { canonicalFoodName } from '@/components/common/FoodAutocomplete'
+
+// Units offered for a fridge quantity ('' = number of items)
+const FRIDGE_UNITS = ['', 'g', 'kg', 'ml', 'cl', 'L']
 
 /** Day of an expiry date ("" when none), to compare lots. */
 const expiryDay = (date: string | null | undefined) => (date ? String(date).slice(0, 10) : '')
@@ -30,6 +34,7 @@ export default function FridgePage() {
   const [showForm, setShowForm] = useState(false)
   const [foodName, setFoodName] = useState('')
   const [quantity, setQuantity] = useState('')
+  const [unit, setUnit] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
   const [expirySuggested, setExpirySuggested] = useState(false)
   const [search, setSearch] = useState('')
@@ -75,6 +80,7 @@ export default function FridgePage() {
   const resetForm = () => {
     setFoodName('')
     setQuantity('')
+    setUnit('')
     setExpiryDate('')
     setExpirySuggested(false)
     setShowForm(false)
@@ -97,7 +103,7 @@ export default function FridgePage() {
       food_name: name,
       category: classifyGroceryItem(name),
       quantity: quantity || null,
-      unit: null,
+      unit: quantity ? unit || null : null,
       added_date: new Date().toISOString(),
       expiry_date: expiryDate || null,
       is_available: true,
@@ -110,7 +116,10 @@ export default function FridgePage() {
   const updateExisting = async () => {
     if (!duplicate) return
     const updates: Partial<FridgeItem> = { added_date: new Date().toISOString() }
-    if (quantity) updates.quantity = quantity
+    if (quantity) {
+      updates.quantity = quantity
+      updates.unit = unit || null
+    }
     if (expiryDate) updates.expiry_date = expiryDate
     updateItem(duplicate.id, updates)
     await fridgeService.updateItem(duplicate.id, updates).catch((err) => console.error('Update error:', err))
@@ -188,13 +197,32 @@ export default function FridgePage() {
             existingKeys={existingKeys}
           />
           <div className="grid grid-cols-2 gap-2">
-            <input
-              type="text"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder={t('fridge.quantity')}
-              className="px-3 py-2 border border-border rounded-sm bg-surface-200 text-ink"
-            />
+            <div className="flex gap-1.5">
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={quantity}
+                // Only digits and one decimal separator are kept
+                onChange={(e) => setQuantity(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.'))}
+                placeholder={t('fridge.quantity')}
+                aria-label={t('fridge.quantity')}
+                className="w-full min-w-0 px-3 py-2 border border-border rounded-sm bg-surface-200 text-ink"
+              />
+              <select
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                aria-label={t('fridge.unit')}
+                className="shrink-0 px-2 py-2 border border-border rounded-sm bg-surface-200 text-ink"
+              >
+                {FRIDGE_UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {u || t('fridge.unitItems')}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="relative">
               <input
                 type="date"
@@ -298,7 +326,9 @@ export default function FridgePage() {
                 <div>
                   <p className="font-medium text-ink">{item.food_name}</p>
                   <FoodWarningBadge flag={foodFlag(item.food_name)} withLabel />
-                  {item.quantity && <p className="text-xs text-ink-muted">{item.quantity}</p>}
+                  {formatFridgeQuantity(item.quantity, item.unit) && (
+                    <p className="text-xs text-ink-muted">{formatFridgeQuantity(item.quantity, item.unit)}</p>
+                  )}
                   {days !== null && (
                     <p
                       className={`text-xs mt-0.5 flex items-center gap-1 ${

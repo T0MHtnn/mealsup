@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { cached, clearCache, invalidate, peek } from '@/services/cache'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -8,6 +9,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Cache durations (writes made in the app invalidate them immediately)
+const RECIPES_TTL = 30 * 60 * 1000 // recipes rarely change
+const USER_TTL = 5 * 60 * 1000
 
 // ============ AUTH ============
 
@@ -35,6 +40,7 @@ export const authService = {
 
   signOut: async () => {
     const { error } = await supabase.auth.signOut()
+    clearCache()
     if (error) throw error
   },
 
@@ -129,14 +135,20 @@ const replaceIngredients = async (recipeId: string, ingredients: RecipeIngredien
 
 export const recipeService = {
   // RLS returns the public recipes plus the user's own private ones
-  getRecipes: async () => {
-    const { data, error } = await supabase
-      .from('recipes')
-      .select('*, recipe_ingredients(*)')
-      .order('title')
-    if (error) throw error
-    return data || []
-  },
+  getRecipes: () =>
+    cached(
+      'recipes',
+      RECIPES_TTL,
+      async () => {
+        const { data, error } = await supabase
+          .from('recipes')
+          .select('*, recipe_ingredients(*)')
+          .order('title')
+        if (error) throw error
+        return data || []
+      },
+      true
+    ) as Promise<any[]>,
 
   /** User recipes are always private: only their author can see them. */
   createRecipe: async (userId: string, recipe: RecipeInput, ingredients: RecipeIngredientInput[]) => {
@@ -147,6 +159,7 @@ export const recipeService = {
       .single()
     if (error) throw error
     await replaceIngredients(data.id, ingredients)
+    invalidate('recipes')
     return data.id as string
   },
 
@@ -157,14 +170,19 @@ export const recipeService = {
       .eq('id', recipeId)
     if (error) throw error
     await replaceIngredients(recipeId, ingredients)
+    invalidate('recipes')
   },
 
   deleteRecipe: async (recipeId: string) => {
     const { error } = await supabase.from('recipes').delete().eq('id', recipeId)
     if (error) throw error
+    invalidate('recipes')
   },
 
   getRecipeById: async (recipeId: string) => {
+    // Opened from the list: the recipe is already loaded, no request needed
+    const fromList = peek<any[]>('recipes')?.find((r) => r.id === recipeId)
+    if (fromList) return fromList
     const { data, error } = await supabase
       .from('recipes')
       .select('*, recipe_ingredients(*)')
@@ -314,14 +332,15 @@ export const shoppingService = {
 // ============ FAVORITES ============
 
 export const favoriteService = {
-  getFavoriteIds: async (userId: string) => {
-    const { data, error } = await supabase
-      .from('favorite_recipes')
-      .select('recipe_id')
-      .eq('user_id', userId)
-    if (error) throw error
-    return (data || []).map((row) => row.recipe_id)
-  },
+  getFavoriteIds: (userId: string) =>
+    cached(`favorites:${userId}`, USER_TTL, async () => {
+      const { data, error } = await supabase
+        .from('favorite_recipes')
+        .select('recipe_id')
+        .eq('user_id', userId)
+      if (error) throw error
+      return (data || []).map((row) => row.recipe_id as string)
+    }),
 
   getFavoriteRecipes: async (userId: string) => {
     const { data, error } = await supabase
@@ -337,6 +356,7 @@ export const favoriteService = {
     const { error } = await supabase
       .from('favorite_recipes')
       .insert([{ user_id: userId, recipe_id: recipeId }])
+    invalidate(`favorites:${userId}`)
     if (error) throw error
   },
 
@@ -346,6 +366,7 @@ export const favoriteService = {
       .delete()
       .eq('user_id', userId)
       .eq('recipe_id', recipeId)
+    invalidate(`favorites:${userId}`)
     if (error) throw error
   },
 }
@@ -353,21 +374,23 @@ export const favoriteService = {
 // ============ USER PREFERENCES ============
 
 export const userService = {
-  getUserPreferences: async (userId: string) => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-    if (error) throw error
-    return data
-  },
+  getUserPreferences: (userId: string) =>
+    cached(`prefs:${userId}`, USER_TTL, async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    }) as Promise<any>,
 
   updatePreferences: async (userId: string, preferences: any) => {
     const { data: userData } = await supabase.auth.getUser()
     const { error } = await supabase
       .from('users')
       .upsert({ id: userId, email: userData.user?.email, ...preferences })
+    invalidate(`prefs:${userId}`)
     if (error) throw error
   },
 }
@@ -450,19 +473,21 @@ export interface RecipeRating {
 }
 
 export const ratingService = {
-  getMine: async (userId: string): Promise<RecipeRating[]> => {
-    const { data, error } = await supabase
-      .from('recipe_ratings')
-      .select('recipe_id, rating, note')
-      .eq('user_id', userId)
-    if (error) throw error
-    return data || []
-  },
+  getMine: (userId: string): Promise<RecipeRating[]> =>
+    cached(`ratings:${userId}`, USER_TTL, async () => {
+      const { data, error } = await supabase
+        .from('recipe_ratings')
+        .select('recipe_id, rating, note')
+        .eq('user_id', userId)
+      if (error) throw error
+      return (data || []) as RecipeRating[]
+    }),
 
   save: async (userId: string, recipeId: string, rating: number | null, note: string | null) => {
     const { error } = await supabase
       .from('recipe_ratings')
       .upsert({ user_id: userId, recipe_id: recipeId, rating, note, updated_at: new Date().toISOString() })
+    invalidate(`ratings:${userId}`)
     if (error) throw error
   },
 }
