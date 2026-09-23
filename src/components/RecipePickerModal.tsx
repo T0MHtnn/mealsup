@@ -58,7 +58,6 @@ export default function RecipePickerModal({ title, slot, onClose, onSelect }: Re
           value={search}
           onChange={setSearch}
           placeholder={t('recipes.search')}
-          autoFocus
           surface="surface-100"
           className="flex-1"
         />

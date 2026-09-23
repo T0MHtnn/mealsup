@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LogOut, User as UserIcon, Sun, Moon, Monitor, Check, Pencil, X, MessageSquare } from 'lucide-react'
+import { LogOut, User as UserIcon, Sun, Moon, Monitor, Check, Pencil, X, MessageSquare, SlidersHorizontal } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUiStore, type Theme } from '@/store/uiStore'
 import { authService, userService, feedbackService } from '@/services/supabaseClient'
@@ -11,6 +11,7 @@ import { STORES, type StoreKey } from '@/constants/prices'
 import { normalizeText } from '@/utils/text'
 import LanguageSwitch from '@/components/common/LanguageSwitch'
 import EditProfileModal from '@/components/EditProfileModal'
+import Modal from '@/components/common/Modal'
 
 const THEME_OPTIONS: { value: Theme; icon: typeof Sun }[] = [
   { value: 'light', icon: Sun },
@@ -40,6 +41,10 @@ export default function ProfilePage() {
   const [equipmentAll, setEquipmentAll] = useState(true)
   const [equipment, setEquipment] = useState<Set<EquipmentKey>>(new Set())
   const [preferredStore, setPreferredStore] = useState<StoreKey>('average')
+  const [showEquipmentModal, setShowEquipmentModal] = useState(false)
+  const [draftEquipmentAll, setDraftEquipmentAll] = useState(true)
+  const [draftEquipment, setDraftEquipment] = useState<Set<EquipmentKey>>(new Set())
+  const [isSavingEquipment, setIsSavingEquipment] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -81,10 +86,35 @@ export default function ProfilePage() {
     setExcludedFoods(excludedFoods.filter((f) => f !== name))
   }
 
-  const toggleEquipment = (key: EquipmentKey) => {
-    const next = new Set(equipment)
+  // Equipment is edited in its own modal, with its own save button
+  const openEquipmentModal = () => {
+    setDraftEquipmentAll(equipmentAll)
+    setDraftEquipment(new Set(equipment))
+    setShowEquipmentModal(true)
+  }
+
+  const toggleDraftEquipment = (key: EquipmentKey) => {
+    const next = new Set(draftEquipment)
     next.has(key) ? next.delete(key) : next.add(key)
-    setEquipment(next)
+    setDraftEquipment(next)
+  }
+
+  const saveEquipment = async () => {
+    if (!userId) return
+    setIsSavingEquipment(true)
+    try {
+      await userService.updatePreferences(userId, {
+        equipment_all: draftEquipmentAll,
+        equipment: Array.from(draftEquipment),
+      })
+      setEquipmentAll(draftEquipmentAll)
+      setEquipment(draftEquipment)
+      setShowEquipmentModal(false)
+    } catch (err) {
+      console.error('Save equipment error:', err)
+    } finally {
+      setIsSavingEquipment(false)
+    }
   }
 
   const toggleRestriction = (key: DietaryRestrictionKey) => {
@@ -102,8 +132,6 @@ export default function ProfilePage() {
       await userService.updatePreferences(userId, {
         allergies: excludedFoods,
         dietary_restrictions: Array.from(dietaryRestrictions),
-        equipment_all: equipmentAll,
-        equipment: Array.from(equipment),
         preferred_store: preferredStore,
       })
       setSaved(true)
@@ -198,46 +226,88 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="bg-surface-200 border border-border rounded-md p-4">
-        <span className="font-display font-semibold text-ink">{t('profile.equipment')}</span>
-        <p className="text-xs text-ink-muted mt-1">{t('profile.equipmentHint')}</p>
+      <div className="bg-surface-200 border border-border rounded-md p-4 space-y-3">
+        <div>
+          <h2 className="font-display font-semibold text-ink">{t('profile.equipment')}</h2>
+          <p className="text-xs text-ink-muted mt-1">{t('profile.equipmentHint')}</p>
+        </div>
+
+        {equipmentAll ? (
+          <p className="text-sm text-ink">{t('profile.equipmentAllSummary')}</p>
+        ) : equipment.size === 0 ? (
+          <p className="text-sm text-ink">{t('profile.equipmentNone')}</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {EQUIPMENT_LIST.filter(({ key }) => equipment.has(key)).map(({ key, icon: Icon }) => (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-ink bg-tint-sage px-2.5 py-1 rounded-full"
+              >
+                <Icon size={13} className="text-primary" />
+                {t(`equipment.${key}` as const)}
+              </span>
+            ))}
+          </div>
+        )}
 
         <button
           type="button"
-          onClick={() => setEquipmentAll(!equipmentAll)}
-          className={`w-full mt-3 flex items-center gap-2.5 px-3 py-2.5 rounded-sm border text-sm font-display font-semibold transition-colors ${
-            equipmentAll ? 'bg-primary border-primary text-white' : 'border-border text-ink'
-          }`}
+          onClick={openEquipmentModal}
+          className="w-full py-2.5 border border-primary text-primary rounded-full font-display font-semibold flex items-center justify-center gap-2 hover:bg-tint-sage"
         >
-          <span
-            className={`w-4.5 h-4.5 rounded-sm border-2 flex items-center justify-center shrink-0 ${
-              equipmentAll ? 'border-white' : 'border-border'
+          <SlidersHorizontal size={16} />
+          {t('profile.manageEquipment')}
+        </button>
+      </div>
+
+      {showEquipmentModal && (
+        <Modal title={t('profile.equipment')} onClose={() => setShowEquipmentModal(false)}>
+          <button
+            type="button"
+            onClick={() => setDraftEquipmentAll(!draftEquipmentAll)}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-sm border text-sm font-display font-semibold transition-colors ${
+              draftEquipmentAll ? 'bg-primary border-primary text-white' : 'border-border text-ink'
             }`}
           >
-            {equipmentAll && <Check size={12} className="text-white" />}
-          </span>
-          {t('profile.equipmentAll')}
-        </button>
+            <span
+              className={`w-4.5 h-4.5 rounded-sm border-2 flex items-center justify-center shrink-0 ${
+                draftEquipmentAll ? 'border-white' : 'border-border'
+              }`}
+            >
+              {draftEquipmentAll && <Check size={12} className="text-white" />}
+            </span>
+            {t('profile.equipmentAll')}
+          </button>
 
-        <div className={`grid grid-cols-2 gap-2 mt-3 ${equipmentAll ? 'opacity-40 pointer-events-none' : ''}`}>
-          {EQUIPMENT_LIST.map(({ key, icon: Icon }) => {
-            const isChecked = equipment.has(key)
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => toggleEquipment(key)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-sm border text-sm transition-colors ${
-                  isChecked ? 'bg-tint-sage border-primary text-ink' : 'border-border text-ink-muted'
-                }`}
-              >
-                <Icon size={16} className={isChecked ? 'text-primary' : ''} />
-                {t(`equipment.${key}` as const)}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+          <div className={`grid grid-cols-2 gap-2 mt-3 ${draftEquipmentAll ? 'opacity-40 pointer-events-none' : ''}`}>
+            {EQUIPMENT_LIST.map(({ key, icon: Icon }) => {
+              const isChecked = draftEquipment.has(key)
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleDraftEquipment(key)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-sm border text-sm transition-colors ${
+                    isChecked ? 'bg-tint-sage border-primary text-ink' : 'border-border text-ink-muted'
+                  }`}
+                >
+                  <Icon size={16} className={isChecked ? 'text-primary' : ''} />
+                  {t(`equipment.${key}` as const)}
+                </button>
+              )
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={saveEquipment}
+            disabled={isSavingEquipment}
+            className="w-full mt-4 py-2.5 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong disabled:opacity-50"
+          >
+            {isSavingEquipment ? t('profile.saving') : t('profile.save')}
+          </button>
+        </Modal>
+      )}
 
       <form
         onSubmit={handleSave}
