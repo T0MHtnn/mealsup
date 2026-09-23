@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS equipment JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS equipment_all BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+-- Type de compte : 'member' (par défaut) ou 'admin'
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member';
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('member', 'admin'));
 -- Enseigne habituelle, pour ajuster les prix ESTIMÉS (voir src/constants/prices.ts)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_store TEXT NOT NULL DEFAULT 'average';
 -- Alertes de péremption (notifications push) : activées ? déjà proposées une fois ?
@@ -47,14 +51,15 @@ LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.users (id, email, username, allergies, preferences, dietary_restrictions)
+  INSERT INTO public.users (id, email, username, allergies, preferences, dietary_restrictions, role)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
     '[]'::jsonb,
     '{}'::jsonb,
-    '[]'::jsonb
+    '[]'::jsonb,
+    CASE WHEN lower(NEW.email) = 'tomhatonlcsm@gmail.com' THEN 'admin' ELSE 'member' END
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
@@ -72,6 +77,124 @@ SELECT au.id, au.email, split_part(au.email, '@', 1), '[]'::jsonb, '{}'::jsonb, 
 FROM auth.users au
 LEFT JOIN public.users pu ON pu.id = au.id
 WHERE pu.id IS NULL;
+
+
+-- ============ ADMINISTRATION ============
+
+-- Compte administrateur de l'app
+UPDATE users SET role = 'admin' WHERE lower(email) = 'tomhatonlcsm@gmail.com';
+
+-- L'utilisateur connecté est-il admin ? (utilisée par les règles RLS et les fonctions ci-dessous)
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin');
+$$;
+
+-- Personne ne peut se donner lui-même le rôle admin : seul un admin (ou le SQL Editor) change un rôle
+CREATE OR REPLACE FUNCTION public.protect_user_role()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR public.is_admin() THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    NEW.role := 'member';
+  ELSIF NEW.role IS DISTINCT FROM OLD.role THEN
+    RAISE EXCEPTION 'Only an admin can change a role';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS users_protect_role ON users;
+CREATE TRIGGER users_protect_role
+  BEFORE INSERT OR UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION public.protect_user_role();
+
+-- Liste des utilisateurs (admins uniquement)
+DROP FUNCTION IF EXISTS public.admin_list_users();
+CREATE FUNCTION public.admin_list_users()
+RETURNS TABLE (
+  id uuid,
+  email text,
+  username text,
+  role text,
+  avatar_url text,
+  created_at timestamptz,
+  last_sign_in_at timestamptz
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Forbidden';
+  END IF;
+  RETURN QUERY
+    SELECT u.id, u.email::text, u.username::text, u.role::text, u.avatar_url::text,
+           u.created_at::timestamptz, au.last_sign_in_at::timestamptz
+    FROM public.users u
+    LEFT JOIN auth.users au ON au.id = u.id
+    ORDER BY u.created_at DESC;
+END;
+$$;
+
+-- Changer le rôle d'un autre utilisateur (admins uniquement, pas soi-même)
+CREATE OR REPLACE FUNCTION public.admin_set_role(target uuid, new_role text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Forbidden';
+  END IF;
+  IF target = auth.uid() THEN
+    RAISE EXCEPTION 'You cannot change your own role';
+  END IF;
+  IF new_role NOT IN ('member', 'admin') THEN
+    RAISE EXCEPTION 'Invalid role';
+  END IF;
+  UPDATE public.users SET role = new_role WHERE id = target;
+END;
+$$;
+
+-- Supprimer définitivement un compte et ses données (admins uniquement, pas soi-même)
+CREATE OR REPLACE FUNCTION public.admin_delete_user(target uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Forbidden';
+  END IF;
+  IF target = auth.uid() THEN
+    RAISE EXCEPTION 'You cannot delete your own account here';
+  END IF;
+  -- ses recettes privées disparaissent avec lui
+  DELETE FROM public.recipes WHERE created_by = target;
+  -- supprimer le compte de connexion supprime en cascade son profil, frigo, planning, courses...
+  DELETE FROM auth.users WHERE id = target;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.admin_list_users() FROM anon;
+REVOKE ALL ON FUNCTION public.admin_set_role(uuid, text) FROM anon;
+REVOKE ALL ON FUNCTION public.admin_delete_user(uuid) FROM anon;
 
 
 -- ============ FRIGO ============
@@ -291,7 +414,7 @@ ALTER TABLE purchase_history ADD COLUMN IF NOT EXISTS date_purchased TIMESTAMPTZ
 
 
 -- ============ RETOURS UTILISATEURS (section Contact du profil) ============
--- Lecture : Supabase > Table Editor > feedback (l'app ne permet que d'envoyer).
+-- Lus par les admins dans l'app (onglet Feedbacks du mode administrateur).
 
 CREATE TABLE IF NOT EXISTS feedback (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -300,6 +423,9 @@ CREATE TABLE IF NOT EXISTS feedback (
   message TEXT NOT NULL CHECK (char_length(message) BETWEEN 1 AND 5000),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Marqué "traité" par l'admin
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS resolved BOOLEAN NOT NULL DEFAULT false;
 
 
 -- ============ ROW LEVEL SECURITY ============
@@ -450,11 +576,27 @@ CREATE POLICY "Users manage their own push subscriptions"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Retours : chacun peut envoyer un message en son nom, personne ne les relit depuis l'app
+-- Retours : chacun peut envoyer un message en son nom ; seuls les admins les lisent et les gèrent
 DROP POLICY IF EXISTS "Users send feedback" ON feedback;
 CREATE POLICY "Users send feedback"
   ON feedback FOR INSERT
   WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins read feedback" ON feedback;
+CREATE POLICY "Admins read feedback"
+  ON feedback FOR SELECT
+  USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins update feedback" ON feedback;
+CREATE POLICY "Admins update feedback"
+  ON feedback FOR UPDATE
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins delete feedback" ON feedback;
+CREATE POLICY "Admins delete feedback"
+  ON feedback FOR DELETE
+  USING (public.is_admin());
 
 
 -- ============ STOCKAGE : PHOTOS DE PROFIL ============

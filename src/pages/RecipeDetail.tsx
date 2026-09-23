@@ -10,7 +10,8 @@ import type { DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
 import { getRecipeWarnings } from '@/utils/warnings'
 import { normalizeText } from '@/utils/text'
 import { formatDuration } from '@/utils/date'
-import { formatEuros } from '@/utils/prices'
+import { formatEstimate } from '@/utils/prices'
+import { formatAmount } from '@/utils/quantity'
 import { usePrices } from '@/hooks/usePrices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import DaySlotPickerModal from '@/components/DaySlotPickerModal'
@@ -110,12 +111,6 @@ export default function RecipeDetailPage() {
 
   const isOwner = Boolean(userId) && recipe.created_by === userId
 
-  const formatQuantity = (qty: number | null) => {
-    if (qty == null) return ''
-    const scaled = Math.round(qty * scale * 10) / 10
-    return Number.isInteger(scaled) ? scaled : scaled.toFixed(1)
-  }
-
   const warnings = getRecipeWarnings(recipe, excludedFoods, dietaryRestrictions)
   const hasExcludedMatch = (recipe.recipe_ingredients || []).some((ing: any) => {
     const name = normalizeText(ing.ingredient_name || '')
@@ -203,9 +198,9 @@ export default function RecipeDetailPage() {
           return (
             <div className="bg-tint-sand rounded-sm px-3 py-2">
               <p className="text-sm text-ink">
-                <span className="font-display font-semibold">{t('prices.estimatedCost')} :</span> ≈ {formatEuros(shown)}{' '}
+                <span className="font-display font-semibold">{t('prices.estimatedCost')} :</span> {formatEstimate(shown)}{' '}
                 <span className="text-ink-muted">
-                  ({t('prices.forPeople', { n: servings })}, ≈ {formatEuros(cost.perServing)}/{t('prices.perPerson')})
+                  ({t('prices.forPeople', { n: servings })}, {formatEstimate(cost.perServing)}/{t('prices.perPerson')})
                 </span>
               </p>
               <p className="text-[11px] text-ink-muted mt-0.5">{t('prices.disclaimer')}</p>
@@ -294,7 +289,7 @@ export default function RecipeDetailPage() {
                     {ing.ingredient_name}
                   </span>
                   <span className={isFlagged ? 'text-danger font-semibold' : 'text-primary font-semibold'}>
-                    {formatQuantity(ing.quantity)} {ing.unit}
+                    {formatAmount(ing.quantity != null ? ing.quantity * scale : null, ing.unit)}
                   </span>
                 </div>
               )

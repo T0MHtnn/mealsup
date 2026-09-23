@@ -112,7 +112,9 @@ export function estimateIngredientCost(name: string, quantity: number | null | u
 /** Estimated cost of a shopping list line (a measured amount, or N usual packs). */
 export function estimateShoppingItemCost(name: string, quantity: number | null | undefined, unit?: string | null): number {
   const u = (unit || '').trim()
-  if (u && !COUNT_UNITS.has(u)) return estimateIngredientCost(name, quantity, u)
+  // A line coming from a recipe has a unit ("200 g", "2 pièces"): price that amount.
+  // Only lines without unit (added from the catalog) are counted in usual packs.
+  if (u) return estimateIngredientCost(name, quantity, u)
   const entry = entryFor(name)
   const pack = packOf(entry)
   const count = Number(quantity) > 0 ? Number(quantity) : 1
@@ -124,7 +126,7 @@ export function catalogPackLabel(name: string, factor: number): string {
   const entry = entryFor(name)
   const pack = packOf(entry)
   const price = costOf(entry, toAmount(pack.qty, pack.unit)) * factor
-  return `≈ ${formatEuros(price)} · ${formatAmount(pack.qty, pack.unit)}`
+  return `${formatEstimate(price)} · ${formatAmount(pack.qty, pack.unit)}`
 }
 
 /** Estimated cost of a whole recipe and per serving. */
@@ -136,6 +138,13 @@ export function estimateRecipeCost(recipe: any, factor: number): { total: number
   ) * factor
   const servings = Number(recipe?.servings) > 0 ? Number(recipe.servings) : 1
   return { total, perServing: total / servings }
+}
+
+/** "≈ 2,50 €", "< 0,10 €" for tiny amounts, "" when there is nothing to pay (salt "à goût"). */
+export function formatEstimate(value: number): string {
+  if (!value || value <= 0) return ''
+  if (value < 0.1) return '< 0,10 €'
+  return `≈ ${formatEuros(value)}`
 }
 
 export function formatEuros(value: number): string {

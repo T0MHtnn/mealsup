@@ -12,6 +12,9 @@ interface User {
 
 interface AuthStore {
   session: Session | null
+  /** Account type, loaded after sign-in (null while unknown) */
+  role: 'member' | 'admin' | null
+  setRole: (role: 'member' | 'admin' | null) => void
   user: User | null
   isLoading: boolean
   setSession: (session: Session | null) => void
@@ -22,6 +25,8 @@ interface AuthStore {
 
 export const useAuthStore = create<AuthStore>((set) => ({
   session: null,
+  role: null,
+  setRole: (role) => set({ role }),
   user: null,
   isLoading: false,
   
@@ -31,5 +36,5 @@ export const useAuthStore = create<AuthStore>((set) => ({
   
   setLoading: (isLoading) => set({ isLoading }),
   
-  logout: () => set({ session: null, user: null }),
+  logout: () => set({ session: null, user: null, role: null }),
 }))

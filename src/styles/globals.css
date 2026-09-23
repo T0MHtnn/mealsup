@@ -18,7 +18,12 @@
   --color-border: #E6DFCF;
 }
 
+:root {
+  color-scheme: light;
+}
+
 .dark {
+  color-scheme: dark;
   --color-primary: #2F9159;
   --color-primary-strong: #4FAE78;
   --color-accent: #E08A52;

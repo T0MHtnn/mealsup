@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LogOut, User as UserIcon, Sun, Moon, Monitor, Check, Pencil, X, MessageSquare, SlidersHorizontal } from 'lucide-react'
+import { LogOut, User as UserIcon, Sun, Moon, Monitor, Check, Pencil, X, MessageSquare, SlidersHorizontal, ShieldCheck } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useUiStore, type Theme } from '@/store/uiStore'
 import { authService, userService, feedbackService } from '@/services/supabaseClient'
@@ -27,6 +28,9 @@ export default function ProfilePage() {
   const { t } = useTranslation()
   const session = useAuthStore((state) => state.session)
   const logout = useAuthStore((state) => state.logout)
+  const role = useAuthStore((state) => state.role)
+  const setAdminMode = useUiStore((state) => state.setAdminMode)
+  const navigate = useNavigate()
   const theme = useUiStore((state) => state.theme)
   const setTheme = useUiStore((state) => state.setTheme)
   const userId = session?.user.id
@@ -200,6 +204,19 @@ export default function ProfilePage() {
             setEmail(fields.email)
           }}
         />
+      )}
+
+      {role === 'admin' && (
+        <button
+          onClick={() => {
+            setAdminMode(true)
+            navigate('/admin/users', { replace: true })
+          }}
+          className="w-full py-2.5 bg-accent text-white rounded-full font-display font-semibold flex items-center justify-center gap-2 hover:opacity-90"
+        >
+          <ShieldCheck size={18} />
+          {t('admin.switchToAdmin')}
+        </button>
       )}
 
       <div className="bg-surface-200 border border-border rounded-md p-4 flex items-center justify-between">

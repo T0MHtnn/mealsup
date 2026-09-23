@@ -26,7 +26,7 @@ import type { TranslationKey } from '@/i18n/translations'
 import { normalizeText } from '@/utils/text'
 import { getMissingEquipment, getRecipeWarnings } from '@/utils/warnings'
 import { formatDuration } from '@/utils/date'
-import { formatEuros } from '@/utils/prices'
+import { formatEstimate, formatEuros } from '@/utils/prices'
 import { usePrices } from '@/hooks/usePrices'
 import { LOW_BUDGET_PER_SERVING } from '@/constants/prices'
 import { HIGH_PROTEIN_PER_SERVING, LIGHT_KCAL_PER_SERVING } from '@/constants/nutrition'
@@ -407,7 +407,7 @@ export default function RecipesPage() {
                       <Clock size={11} />
                       {formatDuration((recipe.prep_time_mins ?? 0) + (recipe.cook_time_mins ?? 0))}
                     </span>
-                    <span title={t('prices.disclaimer')}>≈ {formatEuros(recipeCost(recipe).perServing)}/{t('prices.perPerson')}</span>
+                    <span title={t('prices.disclaimer')}>{formatEstimate(recipeCost(recipe).perServing)}/{t('prices.perPerson')}</span>
                   </div>
                 </div>
               </Link>

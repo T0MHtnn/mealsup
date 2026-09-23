@@ -488,3 +488,60 @@ export const pushService = {
     if (error) throw error
   },
 }
+
+// ============ ADMINISTRATION (réservé aux admins, vérifié côté base) ============
+
+export type UserRole = 'member' | 'admin'
+
+export interface AdminUser {
+  id: string
+  email: string
+  username: string | null
+  role: UserRole
+  avatar_url: string | null
+  created_at: string
+  last_sign_in_at: string | null
+}
+
+export interface Feedback {
+  id: string
+  user_id: string | null
+  email: string | null
+  message: string
+  created_at: string
+  resolved: boolean
+}
+
+export const adminService = {
+  listUsers: async (): Promise<AdminUser[]> => {
+    const { data, error } = await supabase.rpc('admin_list_users')
+    if (error) throw error
+    return data || []
+  },
+
+  setRole: async (userId: string, role: UserRole) => {
+    const { error } = await supabase.rpc('admin_set_role', { target: userId, new_role: role })
+    if (error) throw error
+  },
+
+  deleteUser: async (userId: string) => {
+    const { error } = await supabase.rpc('admin_delete_user', { target: userId })
+    if (error) throw error
+  },
+
+  listFeedback: async (): Promise<Feedback[]> => {
+    const { data, error } = await supabase.from('feedback').select('*').order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  },
+
+  setFeedbackResolved: async (id: string, resolved: boolean) => {
+    const { error } = await supabase.from('feedback').update({ resolved }).eq('id', id)
+    if (error) throw error
+  },
+
+  deleteFeedback: async (id: string) => {
+    const { error } = await supabase.from('feedback').delete().eq('id', id)
+    if (error) throw error
+  },
+}

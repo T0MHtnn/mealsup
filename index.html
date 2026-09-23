@@ -16,6 +16,14 @@
   />
   <link rel="apple-touch-icon" href="/brand/icon.png" />
   <title>MealsUp - Smart Meal Planning</title>
+  <script>
+    // Apply the saved theme before React loads, to avoid a white flash in dark mode
+    try {
+      var theme = (JSON.parse(localStorage.getItem('mealsup-ui') || '{}').state || {}).theme || 'system'
+      var dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+      if (dark) document.documentElement.classList.add('dark')
+    } catch (e) {}
+  </script>
 </head>
 
 <body>

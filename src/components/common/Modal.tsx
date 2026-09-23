@@ -14,7 +14,7 @@ export default function Modal({ title, onClose, children, tall = false }: ModalP
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
-        className={`relative w-full sm:max-w-md max-h-[85dvh] bg-surface-200 rounded-t-lg sm:rounded-lg flex flex-col ${
+        className={`relative w-full sm:max-w-[360px] max-h-[85dvh] bg-surface-200 rounded-t-lg sm:rounded-lg flex flex-col ${
           tall ? 'h-[85dvh] sm:h-[70dvh]' : ''
         }`}
       >

@@ -9,7 +9,7 @@ import { GROCERY_CATEGORIES, GROCERY_CATALOG, type GroceryCategory } from '@/con
 import { normalizeText } from '@/utils/text'
 import { classifyGroceryItem, itemCategory } from '@/utils/groceryCategory'
 import { formatAmount } from '@/utils/quantity'
-import { formatEuros } from '@/utils/prices'
+import { formatEstimate, formatEuros } from '@/utils/prices'
 import { usePrices } from '@/hooks/usePrices'
 import { ingredientKey } from '@/utils/ingredients'
 import { isFridgeFood, suggestedExpiry } from '@/utils/shelfLife'
@@ -231,6 +231,7 @@ export default function ShoppingPage() {
         expiry_date: suggestedExpiry(i.food_name, today),
         is_available: true,
       }))
+    // New purchases are separate lots: the steaks bought today don't replace the ones expiring tomorrow
     try {
       await fridgeService.addItems(userId, toFridge)
       setFridgeMessage(toFridge.length > 0 ? t('shopping.addedToFridge', { n: toFridge.length }) : null)
@@ -478,7 +479,9 @@ export default function ShoppingPage() {
                               {formatAmount(item.quantity, item.unit)}
                             </span>
                           )}
-                          <span className="text-[11px] text-ink-muted">≈ {formatEuros(itemCost(item))}</span>
+                          {formatEstimate(itemCost(item)) && (
+                            <span className="text-[11px] text-ink-muted">{formatEstimate(itemCost(item))}</span>
+                          )}
                         </span>
                         {!item.category && (
                           <span className="text-[10px] font-semibold text-accent bg-tint-clay px-2 py-0.5 rounded-full">

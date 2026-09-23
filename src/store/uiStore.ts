@@ -7,6 +7,9 @@ export type Theme = 'light' | 'dark' | 'system'
 interface UiStore {
   language: Language
   theme: Theme
+  /** Admin accounts only: show the administration tabs instead of the app */
+  adminMode: boolean
+  setAdminMode: (adminMode: boolean) => void
   setLanguage: (language: Language) => void
   setTheme: (theme: Theme) => void
 }
@@ -16,6 +19,8 @@ export const useUiStore = create<UiStore>()(
     (set) => ({
       language: 'fr',
       theme: 'system',
+      adminMode: false,
+      setAdminMode: (adminMode) => set({ adminMode }),
       setLanguage: (language) => set({ language }),
       setTheme: (theme) => set({ theme }),
     }),
