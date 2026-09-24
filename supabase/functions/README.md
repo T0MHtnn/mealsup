@@ -6,7 +6,7 @@ Trois fonctions serveur, en plus de `schema.sql` et `seed.sql` :
 |---|---|---|
 | `import-recipe` | Lit une page de recette (Marmiton, 750g…) et renvoie ses données pour pré-remplir le formulaire « Créer une recette ». | L'app (utilisateur connecté) |
 | `expiry-notifications` | Envoie les alertes de péremption (notifications push) avec 1 ou 2 idées de recettes. | Une tâche planifiée, chaque matin |
-| `feedback-notify` | Prévient les admins d'un nouveau message (notification push, et e-mail si configuré). | Un Database Webhook, à chaque message |
+| `feedback-notify` | Prévient les admins d'un nouveau message (notification push, et e-mail si configuré). | Un trigger de la base (schema.sql), à chaque message |
 
 Tout se fait avec la CLI Supabase via `npx` (rien à installer). `<PROJECT_REF>` est
 l'identifiant du projet : la partie avant `.supabase.co` dans l'URL du projet.
@@ -112,12 +112,17 @@ sur l'adresse du compte admin.)
 
 ### c. Déclencher la fonction à chaque message
 
-Supabase → *Database* → *Webhooks* → **Create a new hook** :
-- Name : `feedback-notify`
-- Table : `feedback` — Events : **Insert** uniquement
-- Type : **Supabase Edge Functions** → `feedback-notify` (méthode POST)
-- HTTP Headers : ajouter `x-cron-secret` = la valeur de `CRON_SECRET`
-- **Create webhook**
+`schema.sql` installe déjà le déclencheur (trigger `feedback_notify`). Il lui manque
+l'adresse du projet et le secret, rangés dans le coffre-fort Supabase (Vault). Dans le
+*SQL Editor*, une seule fois (en remplaçant les deux valeurs) :
+
+```sql
+select vault.create_secret('https://<PROJECT_REF>.supabase.co', 'mealsup_project_url');
+select vault.create_secret('<CRON_SECRET>', 'mealsup_cron_secret');
+```
+
+Pour changer une valeur plus tard :
+`select vault.update_secret(id, '<nouvelle valeur>') from vault.secrets where name = 'mealsup_cron_secret';`
 
 ### d. Activer les notifications sur ton téléphone
 

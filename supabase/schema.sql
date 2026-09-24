@@ -536,6 +536,45 @@ CREATE TABLE IF NOT EXISTS feedback (
 -- Marqué "traité" par l'admin
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS resolved BOOLEAN NOT NULL DEFAULT false;
 
+-- Nouveau message -> fonction feedback-notify (notification push / e-mail aux admins).
+-- L'adresse du projet et le secret sont lus dans le coffre-fort Supabase (Vault) :
+-- rien de secret ici. Tant qu'ils n'y sont pas, le message est enregistré sans alerte.
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+CREATE OR REPLACE FUNCTION public.notify_new_feedback()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  project_url text;
+  secret text;
+BEGIN
+  SELECT decrypted_secret INTO project_url FROM vault.decrypted_secrets WHERE name = 'mealsup_project_url';
+  SELECT decrypted_secret INTO secret FROM vault.decrypted_secrets WHERE name = 'mealsup_cron_secret';
+  IF project_url IS NOT NULL AND secret IS NOT NULL THEN
+    PERFORM net.http_post(
+      url := rtrim(project_url, '/') || '/functions/v1/feedback-notify',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', secret),
+      body := jsonb_build_object('type', 'INSERT', 'table', 'feedback', 'record', jsonb_build_object('id', NEW.id))
+    );
+  END IF;
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  -- une alerte ratée ne doit jamais empêcher l'envoi du message
+  RAISE WARNING 'notify_new_feedback: %', SQLERRM;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.notify_new_feedback() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS feedback_notify ON feedback;
+CREATE TRIGGER feedback_notify
+  AFTER INSERT ON feedback
+  FOR EACH ROW EXECUTE FUNCTION public.notify_new_feedback();
+
 
 -- ============ ARTICLES AJOUTÉS PAR L'UTILISATEUR ============
 -- Produits absents du catalogue, ajoutés par un membre à sa propre liste

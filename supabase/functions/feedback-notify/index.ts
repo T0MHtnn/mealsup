@@ -1,6 +1,6 @@
 // Supabase Edge Function — prévient les admins d'un nouveau message (section Contact du profil)
 //
-// Appelée par un « Database Webhook » Supabase à chaque INSERT dans la table feedback
+// Appelée par le trigger feedback_notify (schema.sql) à chaque INSERT dans la table feedback
 // (voir supabase/functions/README.md). Envoie :
 //   - une notification push sur les appareils où un admin a activé les notifications ;
 //   - un e-mail, seulement si les secrets SMTP_USER et SMTP_PASS sont définis.
