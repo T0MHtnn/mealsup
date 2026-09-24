@@ -25,7 +25,7 @@ import type { TranslationKey } from '@/i18n/translations'
 import { normalizeText } from '@/utils/text'
 import { getMissingEquipment, getRecipeWarnings } from '@/utils/warnings'
 import { formatDuration } from '@/utils/date'
-import { formatEstimate, formatEuros } from '@/utils/prices'
+import { formatEstimate, formatEuros, unknownIngredients } from '@/utils/prices'
 import { usePrices } from '@/hooks/usePrices'
 import { LOW_BUDGET_PER_SERVING } from '@/constants/prices'
 import { HIGH_PROTEIN_PER_SERVING, LIGHT_KCAL_PER_SERVING } from '@/constants/nutrition'
@@ -164,10 +164,12 @@ export default function RecipesPage() {
     return recipes.filter((recipe) => {
       if (showFavoritesOnly && !favoriteIds.has(recipe.id)) return false
       if (category && !isRecipeInCategory(recipe, category)) return false
-      if (lowBudgetOnly && recipeCost(recipe).perServing > LOW_BUDGET_PER_SERVING) return false
+      // An unrecognised ingredient could cost or weigh anything: no "cheap" or "light" claim then
+      const complete = !(lowBudgetOnly || lightOnly) || unknownIngredients(recipe).length === 0
+      if (lowBudgetOnly && (!complete || recipeCost(recipe).perServing > LOW_BUDGET_PER_SERVING)) return false
       if (fridgeMode && !(fridgeMatch.get(recipe.id)?.have ?? 0)) return false
       if (highProteinOnly && recipeNutritionPerServing(recipe).protein < HIGH_PROTEIN_PER_SERVING) return false
-      if (lightOnly && recipeNutritionPerServing(recipe).kcal > LIGHT_KCAL_PER_SERVING) return false
+      if (lightOnly && (!complete || recipeNutritionPerServing(recipe).kcal > LIGHT_KCAL_PER_SERVING)) return false
 
       if (!query) return true
       const ingredientNames = (recipe.recipe_ingredients || []).map((i: any) => i.ingredient_name).join(' ')
@@ -397,7 +399,9 @@ export default function RecipesPage() {
                       <Clock size={11} />
                       {formatDuration((recipe.prep_time_mins ?? 0) + (recipe.cook_time_mins ?? 0))}
                     </span>
-                    <span title={t('prices.disclaimer')}>{formatEstimate(recipeCost(recipe).perServing)}/{t('prices.perPerson')}</span>
+                    {recipeCost(recipe).perServing > 0 && (
+                      <span title={t('prices.disclaimer')}>{formatEstimate(recipeCost(recipe).perServing)}/{t('prices.perPerson')}</span>
+                    )}
                   </div>
                 </div>
               </Link>

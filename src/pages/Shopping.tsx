@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Minus, Trash2, Check, ChevronDown, History, Refrigerator, WifiOff } from 'lucide-react'
+import { Plus, Minus, Trash2, Check, ChevronDown, History, Refrigerator, WifiOff, Info } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-import { shoppingService, fridgeService } from '@/services/supabaseClient'
+import { shoppingService, fridgeService, userFoodService, type UserFood } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import { GROCERY_CATEGORIES, GROCERY_CATALOG, GROCERY_SECTIONS, type GroceryCategory } from '@/constants/groceryCatalog'
 import SearchInput from '@/components/common/SearchInput'
 import { simplify } from '@/utils/groceryCategory'
 import { normalizeText } from '@/utils/text'
-import { classifyGroceryItem, itemCategory } from '@/utils/groceryCategory'
-import { formatAmount } from '@/utils/quantity'
+import { itemCategory } from '@/utils/groceryCategory'
+import { formatAmount, isToTaste } from '@/utils/quantity'
 import { formatEstimate, formatEuros } from '@/utils/prices'
 import { usePrices } from '@/hooks/usePrices'
 import { ingredientKey } from '@/utils/ingredients'
@@ -19,6 +19,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner'
 import Modal from '@/components/common/Modal'
 import FoodWarningBadge from '@/components/common/FoodWarningBadge'
 import InfoButton from '@/components/common/InfoButton'
+import AddFoodModal from '@/components/AddFoodModal'
 
 /** Quantity you can type directly instead of tapping "+" many times; saved on blur / Enter. */
 function QuantityInput({ value, onCommit }: { value: number; onCommit: (quantity: number) => void }) {
@@ -53,6 +54,11 @@ function QuantityInput({ value, onCommit }: { value: number; onCommit: (quantity
 type PendingOp = { id: string; is_purchased: boolean }
 const cacheKey = (userId: string) => `mealsup.shopping.${userId}`
 const queueKey = (userId: string) => `mealsup.shopping.queue.${userId}`
+const foodsKey = (userId: string) => `mealsup.userfoods.${userId}`
+
+/** Value of the aisle selector for the products the member added. */
+const MY_FOODS = 'my-foods'
+type CatalogView = GroceryCategory | typeof MY_FOODS
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -80,8 +86,13 @@ export default function ShoppingPage() {
   const [items, setItems] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'ingredients' | 'list'>('ingredients')
-  const [selectedCategory, setSelectedCategory] = useState<GroceryCategory>(GROCERY_CATEGORIES[0])
+  const [selectedCategory, setSelectedCategory] = useState<CatalogView>(GROCERY_CATEGORIES[0])
   const [catalogQuery, setCatalogQuery] = useState('')
+  const [userFoods, setUserFoods] = useState<UserFood[]>([])
+  const [showAddFood, setShowAddFood] = useState(false)
+  const [addedFoodMessage, setAddedFoodMessage] = useState<string | null>(null)
+  const [confirmRemoveFoodId, setConfirmRemoveFoodId] = useState<string | null>(null)
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set())
 
   // Search across every aisle: each word typed must start a word of the product name
   const catalogResults = useMemo(() => {
@@ -95,7 +106,14 @@ export default function ShoppingPage() {
       }),
     })).filter((group) => group.items.length > 0)
   }, [catalogQuery])
-  const [customItemName, setCustomItemName] = useState('')
+  const userFoodResults = useMemo(() => {
+    const words = simplify(catalogQuery).split(' ').filter(Boolean)
+    if (words.length === 0) return []
+    return userFoods.filter((food) => {
+      const nameWords = simplify(food.name).split(' ')
+      return words.every((w) => nameWords.some((nw) => nw.startsWith(w)))
+    })
+  }, [catalogQuery, userFoods])
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState<any[]>([])
@@ -131,6 +149,14 @@ export default function ShoppingPage() {
       .getFridgeItems(userId)
       .then((fridge) => setFridgeKeys(new Set(fridge.map((f: any) => ingredientKey(f.food_name)))))
       .catch(() => undefined)
+    setUserFoods(readJson<UserFood[]>(foodsKey(userId), []))
+    userFoodService
+      .getFoods(userId)
+      .then((foods) => {
+        setUserFoods(foods)
+        writeJson(foodsKey(userId), foods)
+      })
+      .catch((err) => console.warn('User foods load failed:', err))
   }, [userId])
 
   // Keep an offline copy of the list up to date
@@ -174,7 +200,21 @@ export default function ShoppingPage() {
     return map
   }, [items])
 
-  const setQuantity = async (name: string, quantity: number, category: string | null = selectedCategory) => {
+  const userFoodByName = useMemo(() => {
+    const map = new Map<string, UserFood>()
+    for (const food of userFoods) map.set(normalizeText(food.name), food)
+    return map
+  }, [userFoods])
+
+  // A product added by the member is priced with the price they gave (one unit = one pack or piece)
+  const lineCost = (item: any) => {
+    const food = userFoodByName.get(normalizeText(item.food_name))
+    if (food && !(item.unit || '').trim()) return food.price ? food.price * (Number(item.quantity) > 0 ? Number(item.quantity) : 1) : 0
+    return itemCost(item)
+  }
+  const hasNoPrice = (item: any) => !isToTaste(item.unit) && lineCost(item) <= 0
+
+  const setQuantity = async (name: string, quantity: number, category: string | null) => {
     if (!list) return
     const existing = itemByName.get(normalizeText(name))
 
@@ -201,12 +241,40 @@ export default function ShoppingPage() {
     }
   }
 
-  const handleAddCustom = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const name = customItemName.trim()
-    if (!name) return
-    await setQuantity(name, 1, classifyGroceryItem(name))
-    setCustomItemName('')
+  // A new product only goes to the member's own foods, not straight into the shopping list
+  const handleAddFood = async (food: Omit<UserFood, 'id'>) => {
+    if (!userId) return
+    const created = await userFoodService.addFood(userId, food)
+    const next = [...userFoods, created].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    setUserFoods(next)
+    writeJson(foodsKey(userId), next)
+    setShowAddFood(false)
+    setCatalogQuery('')
+    setSelectedCategory(MY_FOODS)
+    setAddedFoodMessage(t('shopping.customAdded', { name: created.name }))
+  }
+
+  const handleRemoveFood = async (food: UserFood) => {
+    if (confirmRemoveFoodId !== food.id) {
+      setConfirmRemoveFoodId(food.id)
+      return
+    }
+    setConfirmRemoveFoodId(null)
+    const previous = userFoods
+    const next = userFoods.filter((f) => f.id !== food.id)
+    setUserFoods(next)
+    if (userId) writeJson(foodsKey(userId), next)
+    if (next.length === 0 && selectedCategory === MY_FOODS) setSelectedCategory(GROCERY_CATEGORIES[0])
+    await userFoodService.removeFood(food.id).catch((err) => {
+      console.error('Remove custom food error:', err)
+      setUserFoods(previous)
+    })
+  }
+
+  const toggleSection = (key: string) => {
+    const next = new Set(openSections)
+    next.has(key) ? next.delete(key) : next.add(key)
+    setOpenSections(next)
   }
 
   const toggleChecked = async (item: any) => {
@@ -290,7 +358,8 @@ export default function ShoppingPage() {
     items: items.filter((i) => itemCategory(i) === cat),
   })).filter((g) => g.items.length > 0)
 
-  const estimatedTotal = items.reduce((sum, item) => sum + itemCost(item), 0)
+  const estimatedTotal = items.reduce((sum, item) => sum + lineCost(item), 0)
+  const noPriceCount = items.filter(hasNoPrice).length
 
   const totalCount = items.length
   const checkedCount = items.filter((i) => i.is_purchased).length
@@ -299,9 +368,10 @@ export default function ShoppingPage() {
   if (isLoading) return <LoadingSpinner />
 
   /** One product of the catalog, with its quantity in the list. */
-  const renderCatalogRow = (name: string, category: GroceryCategory) => {
+  const renderCatalogRow = (name: string, category: string | null, userFood?: UserFood) => {
     const existing = itemByName.get(normalizeText(name))
     const qty = Number(existing?.quantity) || 0
+    const priceLabel = userFood ? (userFood.price ? formatEstimate(userFood.price) : '') : packLabel(name)
     return (
       <div
         key={name}
@@ -314,9 +384,23 @@ export default function ShoppingPage() {
             {name}
             <FoodWarningBadge flag={foodFlag(name)} />
           </span>
-          <span className="block text-[11px] text-ink-muted">{packLabel(name)}</span>
+          {priceLabel && <span className="block text-[11px] text-ink-muted">{priceLabel}</span>}
         </span>
         <div className="flex items-center gap-3">
+          {userFood && (
+            <button
+              onClick={() => handleRemoveFood(userFood)}
+              onBlur={() => setConfirmRemoveFoodId(null)}
+              aria-label={t('shopping.removeCustom')}
+              title={t('shopping.removeCustom')}
+              className={`h-7 rounded-full flex items-center justify-center gap-1 text-[11px] font-semibold ${
+                confirmRemoveFoodId === userFood.id ? 'px-2 bg-danger text-white' : 'w-7 text-ink-muted hover:text-danger'
+              }`}
+            >
+              <Trash2 size={14} />
+              {confirmRemoveFoodId === userFood.id && t('shopping.removeCustomConfirm')}
+            </button>
+          )}
           <button
             onClick={() => setQuantity(name, qty - 1, category)}
             disabled={qty === 0}
@@ -390,17 +474,47 @@ export default function ShoppingPage() {
 
       {activeTab === 'ingredients' ? (
         <div>
-          <SearchInput
-            value={catalogQuery}
-            onChange={setCatalogQuery}
-            placeholder={t('shopping.searchCatalog')}
-            className="mb-2"
-          />
+          <div className="flex items-center gap-2">
+            <SearchInput
+              value={catalogQuery}
+              onChange={setCatalogQuery}
+              placeholder={t('shopping.searchCatalog')}
+              className="flex-1 min-w-0"
+            />
+            <button
+              onClick={() => setShowAddFood(true)}
+              aria-label={t('shopping.addCustom')}
+              title={t('shopping.addCustom')}
+              className="w-10 h-10 shrink-0 rounded-full bg-accent text-white flex items-center justify-center"
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+          <p className="text-[11px] text-ink-muted mt-1.5 mb-2 flex items-center gap-1.5">
+            {t('prices.indicative')}
+            <InfoButton title={t('prices.infoTitle')} paragraphs={[t('prices.disclaimer'), t('prices.infoStore')]} size={13} />
+          </p>
+          {addedFoodMessage && (
+            <p className="flex items-center gap-2 text-sm text-ink bg-tint-sage rounded-md px-3 py-2 mb-2">
+              <Check size={16} className="text-primary shrink-0" />
+              {addedFoodMessage}
+            </p>
+          )}
           {catalogResults ? (
-            catalogResults.length === 0 ? (
+            catalogResults.length === 0 && userFoodResults.length === 0 ? (
               <p className="text-center text-ink-muted text-sm py-6">{t('shopping.noProduct')}</p>
             ) : (
               <div className="space-y-4">
+                {userFoodResults.length > 0 && (
+                  <section>
+                    <h3 className="text-xs font-display font-semibold uppercase tracking-wide text-ink-muted mb-1.5">
+                      {t('shopping.myFoods')}
+                    </h3>
+                    <div className="space-y-1.5">
+                      {userFoodResults.map((food) => renderCatalogRow(food.name, food.category, food))}
+                    </div>
+                  </section>
+                )}
                 {catalogResults.map(({ category, items: products }) => (
                   <section key={category}>
                     <h3 className="text-xs font-display font-semibold uppercase tracking-wide text-ink-muted mb-1.5">{category}</h3>
@@ -413,9 +527,17 @@ export default function ShoppingPage() {
             <>
               <select
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value as GroceryCategory)}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value as CatalogView)
+                  setAddedFoodMessage(null)
+                }}
                 className="w-full px-3 py-2.5 border border-border rounded-sm bg-surface-200 text-ink font-display font-semibold"
               >
+                {userFoods.length > 0 && (
+                  <option value={MY_FOODS}>
+                    ★ {t('shopping.myFoods')} ({userFoods.length})
+                  </option>
+                )}
                 {GROCERY_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
@@ -423,38 +545,43 @@ export default function ShoppingPage() {
                 ))}
               </select>
 
-              <div className="mt-3 space-y-4">
-                {GROCERY_SECTIONS[selectedCategory].map((section) => (
-                  <section key={section.title}>
-                    <h3 className="text-xs font-display font-semibold uppercase tracking-wide text-ink-muted mb-1.5">
-                      {section.title}
-                    </h3>
-                    <div className="space-y-1.5">
-                      {section.items.map((name) => renderCatalogRow(name, selectedCategory))}
-                    </div>
-                  </section>
-                ))}
-              </div>
+              {selectedCategory === MY_FOODS ? (
+                <div className="mt-3 space-y-1.5">
+                  {userFoods.map((food) => renderCatalogRow(food.name, food.category, food))}
+                </div>
+              ) : (
+                <div className="mt-3 space-y-4">
+                  {GROCERY_SECTIONS[selectedCategory].map((section) => {
+                    const sectionKey = `${selectedCategory}/${section.title}`
+                    const isClosed = !openSections.has(sectionKey)
+                    return (
+                      <section key={section.title}>
+                        <button
+                          onClick={() => toggleSection(sectionKey)}
+                          aria-expanded={!isClosed}
+                          className="w-full flex items-center justify-between py-1 mb-1"
+                        >
+                          <h3 className="text-xs font-display font-semibold uppercase tracking-wide text-ink-muted">
+                            {section.title}
+                            <span className="ml-1.5 font-normal normal-case tracking-normal">({section.items.length})</span>
+                          </h3>
+                          <ChevronDown
+                            size={16}
+                            className={`text-ink-muted transition-transform ${isClosed ? '-rotate-90' : ''}`}
+                          />
+                        </button>
+                        {!isClosed && (
+                          <div className="space-y-1.5">
+                            {section.items.map((name) => renderCatalogRow(name, selectedCategory))}
+                          </div>
+                        )}
+                      </section>
+                    )
+                  })}
+                </div>
+              )}
             </>
           )}
-
-          <p className="text-[11px] text-ink-muted mt-3 flex items-center gap-1.5">
-            {t('prices.indicative')}
-            <InfoButton title={t('prices.infoTitle')} paragraphs={[t('prices.disclaimer'), t('prices.infoStore')]} size={13} />
-          </p>
-
-          <form onSubmit={handleAddCustom} className="flex gap-2 mt-3">
-            <input
-              type="text"
-              value={customItemName}
-              onChange={(e) => setCustomItemName(e.target.value)}
-              placeholder={t('shopping.customItem')}
-              className="flex-1 px-3 py-2 border border-border rounded-full bg-surface-200 text-ink text-sm"
-            />
-            <button type="submit" className="px-3.5 py-2 bg-accent text-white rounded-full">
-              <Plus size={16} />
-            </button>
-          </form>
         </div>
       ) : items.length === 0 ? (
         <p className="text-center text-ink-muted text-sm py-8">{t('shopping.empty')}</p>
@@ -538,8 +665,14 @@ export default function ShoppingPage() {
                               {formatAmount(item.quantity, item.unit)}
                             </span>
                           )}
-                          {formatEstimate(itemCost(item)) && (
-                            <span className="text-[11px] text-ink-muted">{formatEstimate(itemCost(item))}</span>
+                          {hasNoPrice(item) ? (
+                            <span className="text-[10px] font-semibold text-info bg-tint-sky px-1.5 py-0.5 rounded-full mt-0.5 whitespace-nowrap">
+                              {t('shopping.noPrice')}
+                            </span>
+                          ) : (
+                            formatEstimate(lineCost(item)) && (
+                              <span className="text-[11px] text-ink-muted">{formatEstimate(lineCost(item))}</span>
+                            )
                           )}
                         </span>
                         {!item.category && (
@@ -560,6 +693,13 @@ export default function ShoppingPage() {
               </div>
             )
           })}
+
+          {noPriceCount > 0 && (
+            <p className="flex items-start gap-2 text-sm text-info bg-tint-sky rounded-md px-3 py-2">
+              <Info size={16} className="shrink-0 mt-0.5" />
+              {t('shopping.noPriceNote', { n: noPriceCount })}
+            </p>
+          )}
 
           <button
             onClick={handleCompleteShopping}
@@ -582,6 +722,10 @@ export default function ShoppingPage() {
             {confirmClear ? t('shopping.clearConfirm') : t('shopping.clearList')}
           </button>
         </div>
+      )}
+
+      {showAddFood && (
+        <AddFoodModal existing={userFoods} onAdd={handleAddFood} onClose={() => setShowAddFood(false)} />
       )}
 
       {showHistory && (

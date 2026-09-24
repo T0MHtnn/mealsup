@@ -15,6 +15,7 @@ export default {
         },
         accent: 'var(--color-accent)',
         danger: 'var(--color-danger)',
+        info: 'var(--color-info)',
         ink: {
           DEFAULT: 'var(--color-ink)',
           muted: 'var(--color-ink-muted)',
@@ -27,6 +28,7 @@ export default {
           sage: 'var(--color-tint-sage)',
           sand: 'var(--color-tint-sand)',
           clay: 'var(--color-tint-clay)',
+          sky: 'var(--color-tint-sky)',
         },
         border: 'var(--color-border)',
       },

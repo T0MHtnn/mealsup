@@ -1,7 +1,7 @@
 // Estimation de prix À TITRE INDICATIF — voir l'avertissement dans constants/prices.ts
-import { CATEGORY_FALLBACK_PRICE, PRICE_TABLE, type PriceEntry } from '@/constants/prices'
+import { PRICE_TABLE, type PriceEntry } from '@/constants/prices'
 import { CATALOG_PRICES } from '@/constants/catalogPrices'
-import { classifyGroceryItem, simplify } from '@/utils/groceryCategory'
+import { simplify } from '@/utils/groceryCategory'
 import { formatAmount, isToTaste } from '@/utils/quantity'
 
 export interface Amount {
@@ -78,6 +78,8 @@ function shoppingEntry(name: string): PriceEntry {
   return catalogEntry(simplify(name)) ?? entryFor(name)
 }
 
+const UNKNOWN: PriceEntry = { keywords: [], price: 0, per: 'unit' }
+
 const matchCache = new Map<string, { entry: PriceEntry; keyword: string | null }>()
 
 function match(name: string) {
@@ -95,15 +97,13 @@ function match(name: string) {
   // Not in the table: a product of the catalog has its own price
   const catalog = result ? undefined : catalogEntry(simple)
   if (catalog) result = { entry: catalog, keyword: simple }
-  if (!result) {
-    const fallback = CATEGORY_FALLBACK_PRICE[classifyGroceryItem(name)]
-    result = { entry: fallback ? { keywords: [], price: fallback, per: 'kg' } : { keywords: [], price: 4, per: 'unit' }, keyword: null }
-  }
+  // Unknown product: no invented price, it is left out of the estimates
+  if (!result) result = { entry: UNKNOWN, keyword: null }
   matchCache.set(name, result)
   return result
 }
 
-/** Price entry for a product or ingredient name (falls back to an average for its aisle). */
+/** Price entry for a product or ingredient name (price 0 when the product is unknown). */
 export function entryFor(name: string): PriceEntry {
   return match(name).entry
 }
@@ -111,6 +111,20 @@ export function entryFor(name: string): PriceEntry {
 /** The exact keyword of the table recognised in a name ("Tomates bien mûres" -> "tomate"), if any. */
 export function matchedKeyword(name: string): string | null {
   return match(name).keyword
+}
+
+/** True when the name matches a product of the price table or of the catalog. */
+export function isKnownIngredient(name: string): boolean {
+  return match(name).entry !== UNKNOWN
+}
+
+/** Ingredients of a recipe that the estimates cannot recognise (left out of price and nutrition). */
+export function unknownIngredients(recipe: any): string[] {
+  const names = (recipe?.recipe_ingredients || [])
+    .filter((ing: any) => !isToTaste(ing.unit) && Number(ing.quantity) > 0)
+    .map((ing: any) => (ing.ingredient_name || '').trim())
+    .filter((name: string) => name && !isKnownIngredient(name))
+  return [...new Set<string>(names)]
 }
 
 /** Usual pack when an item is added to the list "per unit" (no measure). */
@@ -171,7 +185,7 @@ export function formatEuros(value: number): string {
 
 /** Weight in kg of an ingredient amount (liquids ~1 kg/L), using the average weight of one piece. */
 export function amountToKg(name: string, quantity: number | null | undefined, unit?: string | null): number {
-  if (isToTaste(unit) || !quantity || quantity <= 0) return 0
+  if (isToTaste(unit) || !quantity || quantity <= 0 || !isKnownIngredient(name)) return 0
   const amount = toAmount(quantity, unit || '')
   const weight = amount.kg ?? amount.L
   if (weight !== undefined) return weight

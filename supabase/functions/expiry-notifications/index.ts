@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
     const names = userItems.map((i) => i.food_name)
     const expiresToday = userItems.every((i) => String(i.expiry_date).slice(0, 10) === today)
     const when = expiresToday ? "aujourd'hui" : 'demain'
-    const list = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} et ${names.length - 3} autre(s)`
+    const list = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} et ${names.length - 3} ${names.length - 3 > 1 ? 'autres' : 'autre'}`
     const title = names.length === 1 ? `${names[0]} à consommer vite` : `${names.length} aliments à consommer vite`
     const idea = ideas.length ? ` Idée : ${ideas.map((r) => r.title).join(' ou ')}.` : ''
     const payload = JSON.stringify({

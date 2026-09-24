@@ -16,6 +16,9 @@
   --color-tint-sand: #EFE3C9;
   --color-tint-clay: #F7DCC9;
   --color-border: #E6DFCF;
+  /* Information neutre (ex. prix inconnu), distincte des alertes */
+  --color-info: #2E6A8E;
+  --color-tint-sky: #DCEAF3;
 }
 
 :root {
@@ -36,6 +39,8 @@
   --color-tint-sand: #332B18;
   --color-tint-clay: #3A281D;
   --color-border: #33392A;
+  --color-info: #7DB3D8;
+  --color-tint-sky: #1A2A35;
 }
 
 * {

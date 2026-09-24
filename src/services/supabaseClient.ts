@@ -349,6 +349,43 @@ export const shoppingService = {
   },
 }
 
+// ============ ARTICLES AJOUTÉS ============
+
+export interface UserFood {
+  id: string
+  name: string
+  category: string | null
+  /** Price of one unit (a pack, a piece) in euros, or null when unknown. */
+  price: number | null
+}
+
+export const userFoodService = {
+  getFoods: async (userId: string): Promise<UserFood[]> => {
+    const { data, error } = await supabase
+      .from('user_foods')
+      .select('id, name, category, price')
+      .eq('user_id', userId)
+      .order('name', { ascending: true })
+    if (error) throw error
+    return (data || []).map((f: any) => ({ ...f, price: f.price == null ? null : Number(f.price) }))
+  },
+
+  addFood: async (userId: string, food: Omit<UserFood, 'id'>): Promise<UserFood> => {
+    const { data, error } = await supabase
+      .from('user_foods')
+      .insert([{ user_id: userId, ...food }])
+      .select('id, name, category, price')
+      .single()
+    if (error) throw error
+    return { ...data, price: data.price == null ? null : Number(data.price) }
+  },
+
+  removeFood: async (foodId: string) => {
+    const { error } = await supabase.from('user_foods').delete().eq('id', foodId)
+    if (error) throw error
+  },
+}
+
 // ============ FAVORITES ============
 
 export const favoriteService = {
@@ -486,6 +523,7 @@ export const accountService = {
         ? await read(supabase.from('shopping_list_items').select('*').in('shopping_list_id', lists.map((l: any) => l.id)))
         : [],
       purchase_history: await read(supabase.from('purchase_history').select('*').eq('user_id', userId)),
+      added_foods: await read(supabase.from('user_foods').select('name, category, price, created_at').eq('user_id', userId)),
       own_recipes: await read(supabase.from('recipes').select('*, recipe_ingredients(*)').eq('created_by', userId)),
       notification_devices: await read(supabase.from('push_subscriptions').select('endpoint, created_at').eq('user_id', userId)),
     }

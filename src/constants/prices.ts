@@ -367,19 +367,6 @@ export const PRICE_TABLE: PriceEntry[] = [
   P('friandises', 3, 'unit'),
 ]
 
-/** Prix moyen au kg (ou au litre) par rayon, quand aucun produit ne correspond. */
-export const CATEGORY_FALLBACK_PRICE: Record<string, number> = {
-  'Fruits & Légumes': 3,
-  'Boucherie & Poissonnerie': 15,
-  'Frais & Traiteur': 12,
-  'Crèmerie & Œufs': 8,
-  Boulangerie: 5,
-  'Épicerie salée': 4,
-  'Épicerie sucrée': 8,
-  'Épices & Condiments': 30,
-  Boissons: 3,
-  Surgelés: 5,
-}
 
 /**
  * Coefficient appliqué selon l'enseigne choisie dans le profil (1 = moyenne).

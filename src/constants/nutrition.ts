@@ -316,7 +316,7 @@ export const NUTRITION: Record<string, Macros> = {
   glaces: [200, 3.5, 24, 10],
 }
 
-/** Moyenne par rayon quand l'ingrédient n'est pas dans la table. */
+/** Moyenne par rayon pour un produit connu du catalogue qui n'a pas de ligne dans la table. */
 export const NUTRITION_FALLBACK: Record<string, Macros> = {
   'Fruits & Légumes': [35, 1.5, 6, 0.3],
   'Boucherie & Poissonnerie': [180, 20, 0, 11],

@@ -10,7 +10,7 @@ import type { DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
 import { getRecipeWarnings } from '@/utils/warnings'
 import { normalizeText } from '@/utils/text'
 import { formatDuration } from '@/utils/date'
-import { formatEstimate } from '@/utils/prices'
+import { formatEstimate, unknownIngredients } from '@/utils/prices'
 import { formatAmount } from '@/utils/quantity'
 import { usePrices } from '@/hooks/usePrices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
@@ -209,17 +209,28 @@ export default function RecipeDetailPage() {
         {(() => {
           const cost = recipeCost(recipe)
           const shown = cost.perServing * servings
+          const unknown = unknownIngredients(recipe)
           return (
             <div className="bg-tint-sand rounded-sm px-3 py-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm text-ink">
-                  <span className="font-display font-semibold">{t('prices.estimatedCost')} :</span> {formatEstimate(shown)}{' '}
-                  <span className="text-ink-muted">
-                    ({t('prices.forPeople', { n: servings })}, {formatEstimate(cost.perServing)}/{t('prices.perPerson')})
-                  </span>
+                  <span className="font-display font-semibold">{t('prices.estimatedCost')} :</span>{' '}
+                  {shown > 0 ? (
+                    <>
+                      {formatEstimate(shown)}{' '}
+                      <span className="text-ink-muted">
+                        ({t('prices.forPeople', { n: servings })}, {formatEstimate(cost.perServing)}/{t('prices.perPerson')})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-ink-muted">{t('prices.notEstimable')}</span>
+                  )}
                 </p>
                 <InfoButton title={t('prices.infoTitle')} paragraphs={[t('prices.disclaimer'), t('prices.infoStore')]} />
               </div>
+              {unknown.length > 0 && (
+                <p className="text-xs text-ink-muted mt-1">{t('prices.unknownIngredients', { names: unknown.join(', ') })}</p>
+              )}
             </div>
           )
         })()}
@@ -240,29 +251,35 @@ export default function RecipeDetailPage() {
                 <p className="text-sm font-display font-semibold text-ink">{t('nutrition.title')}</p>
                 <InfoButton title={t('nutrition.infoTitle')} paragraphs={[t('nutrition.basis'), t('nutrition.disclaimer')]} />
               </div>
-              <p className="text-xs text-ink-muted mt-0.5">
-                {n.servings > 1
-                  ? t('nutrition.portionIs', { n: n.servings, g: grams })
-                  : t('nutrition.portionIsWhole', { g: grams })}
-              </p>
-              <table className="w-full mt-2 text-sm">
-                <thead>
-                  <tr className="text-[11px] text-ink-muted">
-                    <th className="text-left font-normal pb-1" />
-                    <th className="text-right font-semibold pb-1">{t('nutrition.colServing', { g: grams })}</th>
-                    <th className="text-right font-semibold pb-1">{t('nutrition.col100g')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {rows.map(({ label, key, unit }) => (
-                    <tr key={key}>
-                      <td className="py-1 text-ink">{label.charAt(0).toUpperCase() + label.slice(1)}</td>
-                      <td className="py-1 text-right font-display font-semibold text-ink">≈ {fmt(n.perServing[key], unit)}</td>
-                      <td className="py-1 text-right text-ink-muted">{n.per100g ? `≈ ${fmt(n.per100g[key], unit)}` : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {n.totalGrams <= 0 ? (
+                <p className="text-xs text-ink-muted mt-0.5">{t('nutrition.notEstimable')}</p>
+              ) : (
+                <>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    {n.servings > 1
+                      ? t('nutrition.portionIs', { n: n.servings, g: grams })
+                      : t('nutrition.portionIsWhole', { g: grams })}
+                  </p>
+                  <table className="w-full mt-2 text-sm">
+                    <thead>
+                      <tr className="text-[11px] text-ink-muted">
+                        <th className="text-left font-normal pb-1" />
+                        <th className="text-right font-semibold pb-1">{t('nutrition.colServing', { g: grams })}</th>
+                        <th className="text-right font-semibold pb-1">{t('nutrition.col100g')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {rows.map(({ label, key, unit }) => (
+                        <tr key={key}>
+                          <td className="py-1 text-ink">{label.charAt(0).toUpperCase() + label.slice(1)}</td>
+                          <td className="py-1 text-right font-display font-semibold text-ink">≈ {fmt(n.perServing[key], unit)}</td>
+                          <td className="py-1 text-right text-ink-muted">{n.per100g ? `≈ ${fmt(n.per100g[key], unit)}` : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
             </div>
           )
         })()}

@@ -537,6 +537,23 @@ CREATE TABLE IF NOT EXISTS feedback (
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS resolved BOOLEAN NOT NULL DEFAULT false;
 
 
+-- ============ ARTICLES AJOUTÉS PAR L'UTILISATEUR ============
+-- Produits absents du catalogue, ajoutés par un membre à sa propre liste
+-- d'aliments (onglet Ingrédients des courses), avec un prix facultatif.
+
+CREATE TABLE IF NOT EXISTS user_foods (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL CHECK (char_length(btrim(name)) BETWEEN 1 AND 80),
+  category TEXT,
+  -- prix d'une unité (un paquet, une pièce), en euros ; NULL = prix inconnu
+  price NUMERIC(8,2) CHECK (price IS NULL OR (price > 0 AND price < 10000)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_foods_user_name ON user_foods (user_id, lower(btrim(name)));
+
+
 -- ============ ROW LEVEL SECURITY ============
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -552,6 +569,7 @@ ALTER TABLE purchase_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipe_ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_foods ENABLE ROW LEVEL SECURITY;
 
 -- Profil
 DROP POLICY IF EXISTS "Users manage their own profile" ON users;
@@ -564,6 +582,13 @@ CREATE POLICY "Users manage their own profile"
 DROP POLICY IF EXISTS "Users manage their own fridge items" ON fridge_items;
 CREATE POLICY "Users manage their own fridge items"
   ON fridge_items FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Articles ajoutés
+DROP POLICY IF EXISTS "Users manage their own foods" ON user_foods;
+CREATE POLICY "Users manage their own foods"
+  ON user_foods FOR ALL
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 

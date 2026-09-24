@@ -218,7 +218,7 @@ export default function FridgePage() {
               >
                 {FRIDGE_UNITS.map((u) => (
                   <option key={u} value={u}>
-                    {u || t('fridge.unitItems')}
+                    {u || t('fridge.unitItems', { n: Number(quantity) || 2 })}
                   </option>
                 ))}
               </select>

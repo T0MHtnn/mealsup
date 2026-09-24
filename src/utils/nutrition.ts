@@ -45,6 +45,7 @@ const EDIBLE_SHARE: Record<string, number> = {
 }
 
 function macrosFor(name: string): Macros {
+  // Unknown ingredients weigh 0 (amountToKg), so they never reach this point
   const rowKey = entryFor(name).keywords[0]
   return (rowKey && NUTRITION[rowKey]) || NUTRITION_FALLBACK[classifyGroceryItem(name)] || [0, 0, 0, 0]
 }
