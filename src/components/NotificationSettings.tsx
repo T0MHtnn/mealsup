@@ -4,8 +4,14 @@ import { useAuthStore } from '@/store/authStore'
 import { useTranslation } from '@/hooks/useTranslation'
 import { disablePush, enablePush, isSubscribedHere, pushSupport } from '@/utils/push'
 
-/** Profile section: turn expiry alerts on/off for this device. */
-export default function NotificationSettings() {
+interface NotificationSettingsProps {
+  /** Title and explanation (default: the members' expiry alerts). */
+  title?: string
+  description?: string
+}
+
+/** Profile section: turn notifications on/off for this device. */
+export default function NotificationSettings({ title, description }: NotificationSettingsProps = {}) {
   const { t } = useTranslation()
   const userId = useAuthStore((state) => state.session?.user.id)
   const support = pushSupport()
@@ -39,15 +45,15 @@ export default function NotificationSettings() {
         <div>
           <h2 className="font-display font-semibold text-ink flex items-center gap-2">
             <BellRing size={17} className="text-accent" />
-            {t('notifications.settingsTitle')}
+            {title ?? t('notifications.settingsTitle')}
           </h2>
-          <p className="text-xs text-ink-muted mt-1">{t('notifications.promptBody')}</p>
+          <p className="text-xs text-ink-muted mt-1">{description ?? t('notifications.promptBody')}</p>
         </div>
         {support === 'supported' && (
           <button
             role="switch"
             aria-checked={enabled}
-            aria-label={t('notifications.settingsTitle')}
+            aria-label={title ?? t('notifications.settingsTitle')}
             onClick={toggle}
             disabled={busy}
             className={`relative w-12 h-7 rounded-full shrink-0 transition-colors disabled:opacity-50 ${enabled ? 'bg-primary' : 'bg-border'}`}

@@ -6,6 +6,7 @@ import { useUiStore } from '@/store/uiStore'
 import { authService, userService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import EditProfileModal from '@/components/EditProfileModal'
+import NotificationSettings from '@/components/NotificationSettings'
 
 export default function AdminProfilePage() {
   const { t } = useTranslation()
@@ -65,6 +66,8 @@ export default function AdminProfilePage() {
           <Pencil size={16} />
         </button>
       </div>
+
+      <NotificationSettings title={t('admin.notifications.title')} description={t('admin.notifications.body')} />
 
       <button
         onClick={backToApp}
