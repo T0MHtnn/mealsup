@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LogOut, User as UserIcon, Sun, Moon, Monitor, Check, Pencil, X, MessageSquare, SlidersHorizontal, ShieldCheck } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { LogOut, User as UserIcon, Sun, Moon, Monitor, Check, Pencil, X, MessageSquare, SlidersHorizontal, ShieldCheck, HelpCircle, ChevronRight } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useUiStore, type Theme } from '@/store/uiStore'
 import { authService, userService, feedbackService } from '@/services/supabaseClient'
@@ -31,6 +31,7 @@ export default function ProfilePage() {
   const role = useAuthStore((state) => state.role)
   const setAdminMode = useUiStore((state) => state.setAdminMode)
   const navigate = useNavigate()
+  const location = useLocation()
   const theme = useUiStore((state) => state.theme)
   const setTheme = useUiStore((state) => state.setTheme)
   const userId = session?.user.id
@@ -147,6 +148,13 @@ export default function ProfilePage() {
     }
   }
 
+  // Arriving from Help > "Contact us": bring the contact form into view
+  useEffect(() => {
+    if (location.hash === '#contact') {
+      window.setTimeout(() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' }), 300)
+    }
+  }, [location.hash])
+
   const handleSendFeedback = async (e: React.FormEvent) => {
     e.preventDefault()
     const message = feedback.trim()
@@ -218,6 +226,18 @@ export default function ProfilePage() {
           {t('admin.switchToAdmin')}
         </button>
       )}
+
+      <Link
+        to="/help"
+        className="bg-surface-200 border border-border rounded-md p-4 flex items-center gap-3 hover:bg-surface-100"
+      >
+        <HelpCircle size={20} className="text-primary shrink-0" />
+        <span className="flex-1">
+          <span className="block font-display font-semibold text-ink">{t('help.row')}</span>
+          <span className="block text-xs text-ink-muted">{t('help.rowHint')}</span>
+        </span>
+        <ChevronRight size={18} className="text-ink-muted shrink-0" />
+      </Link>
 
       <div className="bg-surface-200 border border-border rounded-md p-4 flex items-center justify-between">
         <span className="font-display font-semibold text-ink">{t('profile.language')}</span>
@@ -439,7 +459,7 @@ export default function ProfilePage() {
         </button>
       </form>
 
-      <form onSubmit={handleSendFeedback} className="bg-surface-200 border border-border rounded-md p-4 space-y-3">
+      <form id="contact" onSubmit={handleSendFeedback} className="bg-surface-200 border border-border rounded-md p-4 space-y-3 scroll-mt-4">
         <h2 className="font-display font-semibold text-ink flex items-center gap-2">
           <MessageSquare size={18} className="text-primary" />
           {t('profile.contact')}

@@ -1,67 +1,43 @@
 {
+  "id": "/",
   "name": "MealsUp - Smart Meal Planning",
   "short_name": "MealsUp",
   "description": "Du plan de la semaine au chariot, sans y penser.",
+  "lang": "fr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "portrait",
   "background_color": "#FBF8F2",
   "theme_color": "#1F7A46",
-  "categories": ["food", "lifestyle"],
-  "screenshots": [
-    {
-      "src": "/screenshots/screenshot-1.png",
-      "sizes": "540x720",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "/screenshots/screenshot-2.png",
-      "sizes": "540x720",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ],
+  "categories": ["food", "lifestyle", "productivity"],
   "icons": [
-    {
-      "src": "/brand/icon.png",
-      "sizes": "1024x1024",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/brand/icon.png",
-      "sizes": "1024x1024",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
     {
-      "name": "Nouvelle Course",
-      "short_name": "Course",
-      "description": "Créer une nouvelle liste de course",
+      "name": "Liste de courses",
+      "short_name": "Courses",
+      "description": "Ouvrir la liste de courses",
       "url": "/shopping",
-      "icons": [
-        {
-          "src": "/icons/shortcut-shopping.png",
-          "sizes": "192x192"
-        }
-      ]
+      "icons": [{ "src": "/icons/shortcut.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "Frigo",
+      "name": "Mon frigo",
       "short_name": "Frigo",
-      "description": "Voir et gérer votre frigo",
+      "description": "Voir et gérer le frigo",
       "url": "/fridge",
-      "icons": [
-        {
-          "src": "/icons/shortcut-fridge.png",
-          "sizes": "192x192"
-        }
-      ]
+      "icons": [{ "src": "/icons/shortcut.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Recettes",
+      "short_name": "Recettes",
+      "description": "Chercher une recette",
+      "url": "/recipes",
+      "icons": [{ "src": "/icons/shortcut.png", "sizes": "192x192", "type": "image/png" }]
     }
-  ],
-  "categories": ["food", "productivity"]
+  ]
 }
