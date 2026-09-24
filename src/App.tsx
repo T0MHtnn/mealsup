@@ -18,6 +18,7 @@ const CookModePage = lazy(() => import('@/pages/CookMode'))
 const ShoppingPage = lazy(() => import('@/pages/Shopping'))
 const ProfilePage = lazy(() => import('@/pages/Profile'))
 const HelpPage = lazy(() => import('@/pages/Help'))
+const RecapPage = lazy(() => import('@/pages/Recap'))
 const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsers'))
 const AdminFeedbacksPage = lazy(() => import('@/pages/admin/AdminFeedbacks'))
 const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfile'))
@@ -96,6 +97,7 @@ function App() {
             <Route path="/shopping" element={<ShoppingPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/help" element={<HelpPage />} />
+            <Route path="/recap" element={<RecapPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </>

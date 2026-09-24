@@ -12,14 +12,55 @@ export interface Nutrition {
 
 const EMPTY: Nutrition = { kcal: 0, protein: 0, carbs: 0, fat: 0 }
 
+/**
+ * Share of an ingredient's raw weight that ends up on the plate, for the
+ * portion weight: bones, shells, coffee grounds or tea leaves are not eaten,
+ * and only ~10 % of the frying oil is absorbed. (Their nutrition values in
+ * constants/nutrition.ts are already given per gross weight.)
+ */
+const EDIBLE_SHARE: Record<string, number> = {
+  'os a moelle': 0,
+  'carcasses de poulet': 0,
+  kombu: 0,
+  cafe: 0,
+  the: 0,
+  'bouquet garni': 0,
+  'huile de friture': 0.1,
+  moules: 0.25,
+  poulet: 0.7,
+  'cuisses de poulet': 0.75,
+}
+
 function macrosFor(name: string): Macros {
   const rowKey = entryFor(name).keywords[0]
   return (rowKey && NUTRITION[rowKey]) || NUTRITION_FALLBACK[classifyGroceryItem(name)] || [0, 0, 0, 0]
 }
 
-/** Estimated nutrition of a whole recipe, then per serving. */
-export function estimateRecipeNutrition(recipe: any): { total: Nutrition; perServing: Nutrition } {
+export interface RecipeNutrition {
+  total: Nutrition
+  perServing: Nutrition
+  /** Per 100 g of edible raw ingredients (null when the weight is unknown). */
+  per100g: Nutrition | null
+  servings: number
+  /** Edible raw weight of the whole recipe / of one serving, in grams. */
+  totalGrams: number
+  gramsPerServing: number
+}
+
+const scaleNutrition = (n: Nutrition, factor: number): Nutrition => ({
+  kcal: n.kcal * factor,
+  protein: n.protein * factor,
+  carbs: n.carbs * factor,
+  fat: n.fat * factor,
+})
+
+/**
+ * Estimated nutrition of a recipe: whole recipe, one serving (= the recipe
+ * divided by its number of servings) and per 100 g of raw ingredients.
+ */
+export function estimateRecipeNutrition(recipe: any): RecipeNutrition {
   const total = { ...EMPTY }
+  let totalGrams = 0
   for (const ing of recipe?.recipe_ingredients || []) {
     const name = ing.ingredient_name || ''
     const grams = amountToKg(name, Number(ing.quantity), ing.unit) * 1000
@@ -29,16 +70,16 @@ export function estimateRecipeNutrition(recipe: any): { total: Nutrition; perSer
     total.protein += (protein * grams) / 100
     total.carbs += (carbs * grams) / 100
     total.fat += (fat * grams) / 100
+    totalGrams += grams * (EDIBLE_SHARE[entryFor(name).keywords[0]] ?? 1)
   }
   const servings = Number(recipe?.servings) > 0 ? Number(recipe.servings) : 1
   return {
     total,
-    perServing: {
-      kcal: total.kcal / servings,
-      protein: total.protein / servings,
-      carbs: total.carbs / servings,
-      fat: total.fat / servings,
-    },
+    perServing: scaleNutrition(total, 1 / servings),
+    per100g: totalGrams > 0 ? scaleNutrition(total, 100 / totalGrams) : null,
+    servings,
+    totalGrams,
+    gramsPerServing: totalGrams / servings,
   }
 }
 

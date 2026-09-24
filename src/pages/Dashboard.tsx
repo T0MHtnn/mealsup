@@ -15,6 +15,8 @@ import {
   RefreshCw,
   Users,
   Leaf,
+  BarChart3,
+  ChevronRight,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { mealPlanService, shoppingService, userService, recipeService, favoriteService, ratingService } from '@/services/supabaseClient'
@@ -380,6 +382,20 @@ export default function DashboardPage() {
         <Check size={18} />
         {generated ? t('dashboard.listGenerated') : t('dashboard.generateList')}
       </button>
+
+      <Link
+        to="/recap"
+        className="mt-6 flex items-center gap-3 bg-surface-200 border border-border rounded-md px-3 py-3"
+      >
+        <span className="w-9 h-9 rounded-sm bg-tint-clay flex items-center justify-center shrink-0">
+          <BarChart3 size={18} className="text-accent" />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block font-display font-semibold text-ink">{t('recap.cardTitle')}</span>
+          <span className="block text-xs text-ink-muted">{t('recap.cardHint')}</span>
+        </span>
+        <ChevronRight size={18} className="text-ink-muted shrink-0" />
+      </Link>
 
       {antiWaste.length > 0 && (
         <section className="mt-6 bg-tint-sage rounded-md p-3 space-y-2">

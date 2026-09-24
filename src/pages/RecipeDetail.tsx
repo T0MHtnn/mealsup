@@ -209,25 +209,43 @@ export default function RecipeDetailPage() {
         })()}
 
         {(() => {
-          const n = estimateRecipeNutrition(recipe).perServing
-          const cells = [
-            { label: t('nutrition.kcal'), value: `${Math.round(n.kcal)}` },
-            { label: t('nutrition.protein'), value: `${Math.round(n.protein)} g` },
-            { label: t('nutrition.carbs'), value: `${Math.round(n.carbs)} g` },
-            { label: t('nutrition.fat'), value: `${Math.round(n.fat)} g` },
+          const n = estimateRecipeNutrition(recipe)
+          const grams = Math.round(n.gramsPerServing / 5) * 5
+          const rows: { label: string; key: keyof typeof n.perServing; unit: string }[] = [
+            { label: t('nutrition.energy'), key: 'kcal', unit: ' kcal' },
+            { label: t('nutrition.protein'), key: 'protein', unit: ' g' },
+            { label: t('nutrition.carbs'), key: 'carbs', unit: ' g' },
+            { label: t('nutrition.fat'), key: 'fat', unit: ' g' },
           ]
+          const fmt = (value: number, unit: string) => `${value < 10 && unit === ' g' ? value.toFixed(1).replace('.', ',') : Math.round(value)}${unit}`
           return (
-            <div className="bg-surface-200 border border-border rounded-sm px-3 py-2">
-              <p className="text-sm font-display font-semibold text-ink">{t('nutrition.perServing')}</p>
-              <div className="grid grid-cols-4 gap-1 mt-1.5 text-center">
-                {cells.map((c) => (
-                  <div key={c.label}>
-                    <p className="text-sm font-display font-bold text-ink">≈ {c.value}</p>
-                    <p className="text-[11px] text-ink-muted">{c.label}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-ink-muted mt-1.5">{t('nutrition.disclaimer')}</p>
+            <div className="bg-surface-200 border border-border rounded-sm px-3 py-2.5">
+              <p className="text-sm font-display font-semibold text-ink">{t('nutrition.title')}</p>
+              <p className="text-xs text-ink-muted mt-0.5">
+                {n.servings > 1
+                  ? t('nutrition.portionIs', { n: n.servings, g: grams })
+                  : t('nutrition.portionIsWhole', { g: grams })}
+              </p>
+              <table className="w-full mt-2 text-sm">
+                <thead>
+                  <tr className="text-[11px] text-ink-muted">
+                    <th className="text-left font-normal pb-1" />
+                    <th className="text-right font-semibold pb-1">{t('nutrition.colServing', { g: grams })}</th>
+                    <th className="text-right font-semibold pb-1">{t('nutrition.col100g')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map(({ label, key, unit }) => (
+                    <tr key={key}>
+                      <td className="py-1 text-ink">{label.charAt(0).toUpperCase() + label.slice(1)}</td>
+                      <td className="py-1 text-right font-display font-semibold text-ink">≈ {fmt(n.perServing[key], unit)}</td>
+                      <td className="py-1 text-right text-ink-muted">{n.per100g ? `≈ ${fmt(n.per100g[key], unit)}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-ink-muted mt-2">{t('nutrition.basis')}</p>
+              <p className="text-[11px] text-ink-muted mt-0.5">{t('nutrition.disclaimer')}</p>
             </div>
           )
         })()}

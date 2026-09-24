@@ -9,7 +9,8 @@ export function useTranslation() {
     let str: string = translations[language][key] ?? key
     if (vars) {
       for (const [k, v] of Object.entries(vars)) {
-        str = str.replace(`{${k}}`, String(v))
+        // every occurrence ({n} can appear several times in a sentence)
+        str = str.split(`{${k}}`).join(String(v))
       }
     }
     return str

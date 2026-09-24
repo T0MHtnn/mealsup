@@ -36,6 +36,7 @@ export const HELP: Record<'fr' | 'en', HelpContent> = {
           'Les boutons − / + règlent le nombre de portions de chaque repas.',
           '« Générer ma liste de courses » ajoute tous les ingrédients de la semaine à ta liste, quantités additionnées.',
           'Le bloc Anti-gaspi propose des recettes pour finir les produits frais achetés pour un seul repas.',
+          '« Ton récap de la semaine » résume ta semaine planifiée : calories estimées par jour, plat et ingrédient n° 1, répartition des apports, budget. Les flèches permettent de revoir les semaines passées.',
         ],
       },
       {
@@ -133,6 +134,7 @@ export const HELP: Record<'fr' | 'en', HelpContent> = {
           'The − / + buttons set the number of servings of each meal.',
           '"Generate my shopping list" adds all the week\'s ingredients to your list, quantities added up.',
           'The Zero waste block suggests recipes to finish fresh products bought for a single meal.',
+          '"Your weekly recap" sums up your planned week: estimated calories per day, top dish and ingredient, nutrient breakdown, budget. The arrows let you look back at past weeks.',
         ],
       },
       {
