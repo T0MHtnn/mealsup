@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, X, AlertTriangle, ChefHat, Copy } from 'lucide-react'
+import { Plus, X, AlertTriangle, ChefHat, Copy, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useFridgeStore, type FridgeItem } from '@/store/fridgeStore'
@@ -12,6 +12,7 @@ import { ingredientKey } from '@/utils/ingredients'
 import { suggestedExpiry } from '@/utils/shelfLife'
 import { formatFridgeQuantity } from '@/utils/quantity'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
+import Modal from '@/components/common/Modal'
 import SearchInput from '@/components/common/SearchInput'
 import FoodWarningBadge from '@/components/common/FoodWarningBadge'
 import FoodAutocomplete, { canonicalFoodName } from '@/components/common/FoodAutocomplete'
@@ -39,6 +40,10 @@ export default function FridgePage() {
   const [expirySuggested, setExpirySuggested] = useState(false)
   const [search, setSearch] = useState('')
   const [isMerging, setIsMerging] = useState(false)
+  const [showClear, setShowClear] = useState(false)
+  const [clearText, setClearText] = useState('')
+  const [isClearing, setIsClearing] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!userId) return
@@ -135,6 +140,33 @@ export default function FridgePage() {
   const handleDelete = async (id: string) => {
     removeItem(id)
     await fridgeService.deleteItem(id).catch((err) => console.error('Delete error:', err))
+  }
+
+  // Emptying the fridge needs the confirmation word typed, so it can't happen by a mistaken tap
+  const clearWord = t('fridge.clearWord')
+  const canClear = normalizeText(clearText.trim()) === normalizeText(clearWord)
+
+  const closeClear = () => {
+    setShowClear(false)
+    setClearText('')
+    setClearError(null)
+  }
+
+  const clearFridge = async () => {
+    if (!userId || !canClear) return
+    setIsClearing(true)
+    setClearError(null)
+    try {
+      await fridgeService.clearFridge(userId)
+      setItems([])
+      setSearch('')
+      closeClear()
+    } catch (err) {
+      console.error('Clear fridge error:', err)
+      setClearError(t('fridge.clearError'))
+    } finally {
+      setIsClearing(false)
+    }
   }
 
   /** Keep the most recent line of each duplicated product, delete the others. */
@@ -355,6 +387,63 @@ export default function FridgePage() {
             )
           })}
         </div>
+      )}
+
+      {items.length > 0 && (
+        <button
+          onClick={() => setShowClear(true)}
+          className="w-full py-2.5 rounded-full font-display font-semibold flex items-center justify-center gap-2 border border-border text-danger hover:bg-surface-200"
+        >
+          <Trash2 size={17} />
+          {t('fridge.clear')}
+        </button>
+      )}
+
+      {showClear && (
+        <Modal title={t('fridge.clearTitle')} onClose={closeClear}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              clearFridge()
+            }}
+            className="space-y-3"
+          >
+            <p className="text-sm text-ink">{t('fridge.clearWarning', { n: items.length })}</p>
+            <label className="block">
+              <span className="block text-sm text-ink mb-1.5">
+                {t('fridge.clearTypeWord')} <strong className="font-display">{clearWord}</strong>
+              </span>
+              <input
+                type="text"
+                value={clearText}
+                onChange={(e) => setClearText(e.target.value)}
+                autoFocus
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder={clearWord}
+                className="w-full px-3 py-2 border border-border rounded-sm bg-surface-100 text-ink"
+              />
+            </label>
+            {clearError && <p className="text-sm text-danger">{clearError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={closeClear}
+                className="flex-1 py-2.5 border border-border text-ink rounded-full font-display font-semibold"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={!canClear || isClearing}
+                className="flex-1 py-2.5 bg-danger text-white rounded-full font-display font-semibold disabled:opacity-40"
+              >
+                {t('fridge.clearConfirm')}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )

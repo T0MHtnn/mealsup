@@ -101,6 +101,12 @@ export const fridgeService = {
     return data || []
   },
 
+  /** Removes everything from the user's fridge. */
+  clearFridge: async (userId: string) => {
+    const { error } = await supabase.from('fridge_items').delete().eq('user_id', userId)
+    if (error) throw error
+  },
+
   deleteItem: async (itemId: string) => {
     const { error } = await supabase
       .from('fridge_items')
