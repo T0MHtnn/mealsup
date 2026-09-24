@@ -109,6 +109,11 @@ export default function SignupPage() {
                 />
               </div>
 
+              <p className="text-xs text-ink-muted">
+                {t('legal.signupConsent')}{' '}
+                <Link to="/legal/privacy" className="text-primary font-semibold">{t('legal.privacyLink')}</Link>.
+              </p>
+
               <button
                 type="submit"
                 disabled={isLoading}

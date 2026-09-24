@@ -4,6 +4,7 @@ import { supabase } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import LanguageSwitch from '@/components/common/LanguageSwitch'
 import Logo from '@/components/common/Logo'
+import GoogleIcon from '@/components/common/GoogleIcon'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -105,7 +106,8 @@ export default function LoginPage() {
           disabled={isLoading}
           className="w-full py-2.5 border border-border rounded-full font-display font-semibold text-ink hover:bg-surface-100 disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          🔷 {t('auth.continueGoogle')}
+          <GoogleIcon />
+          {t('auth.continueGoogle')}
         </button>
 
         <div className="text-center text-sm text-ink-muted">
@@ -114,6 +116,12 @@ export default function LoginPage() {
             {t('auth.signUpLink')}
           </Link>
         </div>
+
+        <p className="text-center text-xs text-ink-muted">
+          <Link to="/legal/privacy" className="hover:text-ink underline-offset-2 hover:underline">{t('legal.privacy')}</Link>
+          {' · '}
+          <Link to="/legal/notice" className="hover:text-ink underline-offset-2 hover:underline">{t('legal.notice')}</Link>
+        </p>
       </div>
     </div>
   )

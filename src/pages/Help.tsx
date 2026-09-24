@@ -28,7 +28,7 @@ const ICONS: Record<HelpSectionId, typeof Search> = {
 }
 
 export default function HelpPage() {
-  const { language } = useTranslation()
+  const { t, language } = useTranslation()
   const navigate = useNavigate()
   const content = HELP[language === 'en' ? 'en' : 'fr']
   // One topic open at a time (the first one at start): opening another closes it,
@@ -52,7 +52,7 @@ export default function HelpPage() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          aria-label="Back"
+          aria-label={t('common.back')}
           className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-ink shrink-0"
         >
           <ChevronLeft size={20} />

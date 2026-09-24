@@ -1,14 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, Plus, X, Lock, Check, Link2, Loader2 } from 'lucide-react'
+import { ChevronLeft, Plus, X, Lock, Check, Link2, Loader2, Camera } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { recipeService, supabase, type RecipeIngredientInput } from '@/services/supabaseClient'
+import { recipeService, storageService, supabase, type RecipeIngredientInput } from '@/services/supabaseClient'
+import { resizeImage } from '@/utils/image'
 import { parseIngredientLine } from '@/utils/recipeImport'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { TranslationKey } from '@/i18n/translations'
 import { EQUIPMENT_LIST, type EquipmentKey } from '@/constants/equipment'
 import { MEAL_CATEGORIES, MEAL_CATEGORY_TAG, isRecipeInCategory, type MealCategory } from '@/constants/mealCategories'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
+
+/** Photo shown on the recipe: uploaded by the user, or taken from an imported page (credited). */
+interface Photo {
+  url: string
+  credit: string | null
+  sourceUrl: string | null
+}
 
 interface IngredientRow {
   name: string
@@ -56,6 +64,23 @@ export default function RecipeEditorPage() {
   const [importUrl, setImportUrl] = useState('')
   const [isImporting, setIsImporting] = useState(false)
   const [importStatus, setImportStatus] = useState<'idle' | 'done' | 'error'>('idle')
+  const [photo, setPhoto] = useState<Photo | null>(null)
+  const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<Blob | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoError, setPhotoError] = useState(false)
+  const photoInput = useRef<HTMLInputElement>(null)
+
+  // Local preview of a picked photo, released when replaced
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreview(null)
+      return
+    }
+    const url = URL.createObjectURL(photoFile)
+    setPhotoPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [photoFile])
 
   useEffect(() => {
     if (!id || !userId) return
@@ -84,6 +109,10 @@ export default function RecipeEditorPage() {
         setIngredients(ings.length > 0 ? ings : [{ ...EMPTY_INGREDIENT }])
         const recipeSteps = Array.isArray(recipe.instructions) ? recipe.instructions : []
         setSteps(recipeSteps.length > 0 ? recipeSteps : [''])
+        if (recipe.image_url) {
+          setPhoto({ url: recipe.image_url, credit: recipe.image_credit ?? null, sourceUrl: recipe.image_source_url ?? null })
+          setSavedImageUrl(recipe.image_url)
+        }
       })
       .catch((err) => console.error('Recipe editor load error:', err))
       .finally(() => setIsLoading(false))
@@ -121,6 +150,7 @@ export default function RecipeEditorPage() {
       const parsed: IngredientRow[] = (data.ingredients || []).map((line: string) => parseIngredientLine(line))
       setIngredients(parsed.length > 0 ? parsed : [{ ...EMPTY_INGREDIENT }])
       setSteps(data.steps?.length ? data.steps : [''])
+      if (data.image && !photoFile) setPhoto({ url: data.image, credit: source, sourceUrl: data.source || url })
       setImportStatus('done')
     } catch (err) {
       console.error('Recipe import error:', err)
@@ -128,6 +158,22 @@ export default function RecipeEditorPage() {
     } finally {
       setIsImporting(false)
     }
+  }
+
+  const handlePhotoPicked = async (file: File | undefined) => {
+    if (!file) return
+    setPhotoError(false)
+    try {
+      setPhotoFile(await resizeImage(file))
+    } catch (err) {
+      console.error('Photo read error:', err)
+      setPhotoError(true)
+    }
+  }
+
+  const removePhoto = () => {
+    setPhotoFile(null)
+    setPhoto(null)
   }
 
   const handleSave = async () => {
@@ -163,16 +209,30 @@ export default function RecipeEditorPage() {
       instructions: cleanSteps,
     }
 
+    let uploadedUrl: string | null = null
     try {
-      if (id) {
-        await recipeService.updateRecipe(id, input, cleanIngredients)
-        navigate(-1)
+      if (photoFile) {
+        uploadedUrl = await storageService.uploadRecipeImage(userId, photoFile)
+        Object.assign(input, { image_url: uploadedUrl, image_credit: null, image_source_url: null })
       } else {
-        const newId = await recipeService.createRecipe(userId, input, cleanIngredients)
-        navigate(`/recipes/${newId}`, { replace: true })
+        Object.assign(input, {
+          image_url: photo?.url ?? null,
+          image_credit: photo?.credit ?? null,
+          image_source_url: photo?.sourceUrl ?? null,
+        })
       }
+      let newId: string | null = null
+      if (id) await recipeService.updateRecipe(id, input, cleanIngredients)
+      else newId = await recipeService.createRecipe(userId, input, cleanIngredients)
+      // Previous photo replaced or removed: its file is no longer needed
+      if (savedImageUrl && savedImageUrl !== (uploadedUrl ?? photo?.url)) {
+        storageService.removeRecipeImage(savedImageUrl).catch(() => {})
+      }
+      if (newId) navigate(`/recipes/${newId}`, { replace: true })
+      else navigate(-1)
     } catch (err) {
       console.error('Recipe save error:', err)
+      if (uploadedUrl) storageService.removeRecipeImage(uploadedUrl).catch(() => {})
       setError(t('editor.errorSave'))
       setIsSaving(false)
     }
@@ -185,7 +245,7 @@ export default function RecipeEditorPage() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          aria-label="Back"
+          aria-label={t('common.back')}
           className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-ink shrink-0"
         >
           <ChevronLeft size={20} />
@@ -230,6 +290,61 @@ export default function RecipeEditorPage() {
           {importStatus === 'error' && <p className="text-xs text-danger">{t('import.error')}</p>}
         </section>
       )}
+
+      <section className="space-y-1.5">
+        <p className="text-sm font-display font-semibold text-ink">{t('editor.photo')}</p>
+        <input
+          ref={photoInput}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            handlePhotoPicked(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+        {photoPreview || photo ? (
+          <div className="relative h-44 rounded-md overflow-hidden bg-tint-sage">
+            <img
+              src={photoPreview ?? photo!.url}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div className="absolute bottom-2 right-2 flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => photoInput.current?.click()}
+                className="px-3 py-1.5 rounded-full bg-surface-200 shadow text-xs font-semibold text-ink flex items-center gap-1"
+              >
+                <Camera size={13} />
+                {t('editor.photoChange')}
+              </button>
+              <button
+                type="button"
+                onClick={removePhoto}
+                aria-label={t('editor.photoRemove')}
+                className="w-8 h-8 rounded-full bg-surface-200 shadow flex items-center justify-center text-danger"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => photoInput.current?.click()}
+            className="w-full h-28 rounded-md border-2 border-dashed border-border text-ink-muted flex flex-col items-center justify-center gap-1.5 hover:bg-surface-200"
+          >
+            <Camera size={22} />
+            <span className="text-sm font-semibold">{t('editor.photoAdd')}</span>
+          </button>
+        )}
+        {photo?.credit && !photoPreview && (
+          <p className="text-[11px] text-ink-muted">{t('recipes.photoCredit', { credit: photo.credit })}</p>
+        )}
+        {photoError && <p className="text-xs text-danger">{t('editor.photoError')}</p>}
+      </section>
 
       <section className="space-y-1.5">
         <label className="text-sm font-display font-semibold text-ink">{t('editor.name')}</label>

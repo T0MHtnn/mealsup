@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, Heart, Clock, Users, Gauge, Utensils, Minus, Plus, CalendarPlus, AlertTriangle, Pencil, Trash2, Wrench, ChefHat } from 'lucide-react'
+import { ChevronLeft, Heart, Clock, Users, Gauge, Minus, Plus, CalendarPlus, AlertTriangle, Pencil, Trash2, Wrench, ChefHat } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { recipeService, favoriteService, mealPlanService, userService } from '@/services/supabaseClient'
+import { recipeService, favoriteService, mealPlanService, userService, storageService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import type { TranslationKey } from '@/i18n/translations'
@@ -14,9 +14,11 @@ import { formatEstimate } from '@/utils/prices'
 import { formatAmount } from '@/utils/quantity'
 import { usePrices } from '@/hooks/usePrices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
+import RecipeImage from '@/components/common/RecipeImage'
 import DaySlotPickerModal from '@/components/DaySlotPickerModal'
 import RecipeRating from '@/components/RecipeRating'
 import { estimateRecipeNutrition } from '@/utils/nutrition'
+import InfoButton from '@/components/common/InfoButton'
 
 export default function RecipeDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -78,6 +80,7 @@ export default function RecipeDetailPage() {
     }
     try {
       await recipeService.deleteRecipe(id)
+      storageService.removeRecipeImage(recipe?.image_url).catch(() => {})
       navigate('/recipes', { replace: true })
     } catch (err) {
       console.error('Delete recipe error:', err)
@@ -119,19 +122,30 @@ export default function RecipeDetailPage() {
 
   return (
     <div>
-      <div className="relative h-56 bg-tint-sage flex items-center justify-center">
-        <Utensils className="text-primary" size={56} strokeWidth={1.5} />
+      <div className="relative h-56 overflow-hidden">
+        <RecipeImage recipe={recipe} size="full" iconSize={56} />
+        {recipe.image_url && recipe.image_credit && (
+          // Author and license of a photo that is not the user's own (free licenses require it)
+          <a
+            href={recipe.image_source_url || undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute bottom-1.5 right-1.5 max-w-[80%] truncate text-[10px] text-white/90 bg-black/45 px-1.5 py-0.5 rounded-sm"
+          >
+            {t('recipes.photoCredit', { credit: recipe.image_credit })}
+          </a>
+        )}
         <button
           onClick={() => navigate(-1)}
-          aria-label="Back"
-          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-surface-200 flex items-center justify-center text-ink"
+          aria-label={t('common.back')}
+          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-surface-200 shadow flex items-center justify-center text-ink"
         >
           <ChevronLeft size={20} />
         </button>
         <button
           onClick={toggleFavorite}
-          aria-label="Toggle favorite"
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-surface-200 flex items-center justify-center text-primary"
+          aria-label={t('recipes.toggleFavorite')}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-surface-200 shadow flex items-center justify-center text-primary"
         >
           <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
         </button>
@@ -197,13 +211,15 @@ export default function RecipeDetailPage() {
           const shown = cost.perServing * servings
           return (
             <div className="bg-tint-sand rounded-sm px-3 py-2">
-              <p className="text-sm text-ink">
-                <span className="font-display font-semibold">{t('prices.estimatedCost')} :</span> {formatEstimate(shown)}{' '}
-                <span className="text-ink-muted">
-                  ({t('prices.forPeople', { n: servings })}, {formatEstimate(cost.perServing)}/{t('prices.perPerson')})
-                </span>
-              </p>
-              <p className="text-[11px] text-ink-muted mt-0.5">{t('prices.disclaimer')}</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm text-ink">
+                  <span className="font-display font-semibold">{t('prices.estimatedCost')} :</span> {formatEstimate(shown)}{' '}
+                  <span className="text-ink-muted">
+                    ({t('prices.forPeople', { n: servings })}, {formatEstimate(cost.perServing)}/{t('prices.perPerson')})
+                  </span>
+                </p>
+                <InfoButton title={t('prices.infoTitle')} paragraphs={[t('prices.disclaimer'), t('prices.infoStore')]} />
+              </div>
             </div>
           )
         })()}
@@ -220,7 +236,10 @@ export default function RecipeDetailPage() {
           const fmt = (value: number, unit: string) => `${value < 10 && unit === ' g' ? value.toFixed(1).replace('.', ',') : Math.round(value)}${unit}`
           return (
             <div className="bg-surface-200 border border-border rounded-sm px-3 py-2.5">
-              <p className="text-sm font-display font-semibold text-ink">{t('nutrition.title')}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-display font-semibold text-ink">{t('nutrition.title')}</p>
+                <InfoButton title={t('nutrition.infoTitle')} paragraphs={[t('nutrition.basis'), t('nutrition.disclaimer')]} />
+              </div>
               <p className="text-xs text-ink-muted mt-0.5">
                 {n.servings > 1
                   ? t('nutrition.portionIs', { n: n.servings, g: grams })
@@ -244,8 +263,6 @@ export default function RecipeDetailPage() {
                   ))}
                 </tbody>
               </table>
-              <p className="text-[11px] text-ink-muted mt-2">{t('nutrition.basis')}</p>
-              <p className="text-[11px] text-ink-muted mt-0.5">{t('nutrition.disclaimer')}</p>
             </div>
           )
         })()}
@@ -257,7 +274,7 @@ export default function RecipeDetailPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setServings((s) => Math.max(1, s - 1))}
-              aria-label="Decrease servings"
+              aria-label={t('common.decrease')}
               className="w-8 h-8 rounded-full border border-border flex items-center justify-center text-ink hover:bg-surface-100"
             >
               <Minus size={14} />
@@ -265,7 +282,7 @@ export default function RecipeDetailPage() {
             <span className="w-5 text-center font-display font-semibold text-ink">{servings}</span>
             <button
               onClick={() => setServings((s) => s + 1)}
-              aria-label="Increase servings"
+              aria-label={t('common.increase')}
               className="w-8 h-8 rounded-full border border-border flex items-center justify-center text-ink hover:bg-surface-100"
             >
               <Plus size={14} />

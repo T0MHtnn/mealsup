@@ -346,7 +346,7 @@ export default function FridgePage() {
                 </div>
                 <button
                   onClick={() => handleDelete(item.id)}
-                  aria-label="Delete"
+                  aria-label={t('common.delete')}
                   className="p-1.5 text-ink-muted hover:text-danger"
                 >
                   <X size={18} />

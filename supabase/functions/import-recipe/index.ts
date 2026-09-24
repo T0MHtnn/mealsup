@@ -92,6 +92,23 @@ function findRecipe(node: any): any | null {
   return null
 }
 
+/** Photo of the recipe: schema.org "image" (text, list or ImageObject), else the page's og:image. */
+function image(value: unknown, html: string, base: URL): string | null {
+  const first = Array.isArray(value) ? value[0] : value
+  const raw =
+    (typeof first === 'string' && first) ||
+    (first && typeof first === 'object' && typeof (first as any).url === 'string' && (first as any).url) ||
+    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1]
+  if (!raw) return null
+  try {
+    const url = new URL(raw.replace(/&amp;/g, '&'), base)
+    return url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
 function steps(value: unknown): string[] {
   if (typeof value === 'string') {
     return cleanText(value)
@@ -158,6 +175,7 @@ Deno.serve(async (req) => {
     servings: servings(recipe.recipeYield),
     ingredients: (Array.isArray(recipe.recipeIngredient) ? recipe.recipeIngredient : []).map(cleanText).filter(Boolean),
     steps: steps(recipe.recipeInstructions),
+    image: image(recipe.image, html, target),
     source: target.href,
   })
 })

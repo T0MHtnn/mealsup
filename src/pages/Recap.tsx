@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Flame, Trophy, Carrot, Salad, Wallet, UtensilsCrossed, Info } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Flame, Trophy, Carrot, Salad, Wallet, UtensilsCrossed } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { mealPlanService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -9,6 +9,7 @@ import { getWeekDates, toISODate } from '@/utils/date'
 import { formatEstimate } from '@/utils/prices'
 import { computeWeekRecap, type WeekRecap } from '@/utils/weeklyRecap'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
+import InfoButton from '@/components/common/InfoButton'
 
 const CHART_HEIGHT = 120
 
@@ -83,12 +84,13 @@ export default function RecapPage() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          aria-label="Back"
+          aria-label={t('common.back')}
           className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-ink shrink-0"
         >
           <ChevronLeft size={20} />
         </button>
-        <h1 className="font-display font-bold text-2xl text-ink">{t('recap.title')}</h1>
+        <h1 className="font-display font-bold text-2xl text-ink flex-1">{t('recap.title')}</h1>
+        <InfoButton title={t('recap.infoTitle')} paragraphs={[t('recap.disclaimer'), t('nutrition.disclaimer')]} size={18} />
       </div>
 
       <div className="flex items-center justify-between bg-surface-200 border border-border rounded-full px-1 py-1">
@@ -294,10 +296,7 @@ export default function RecapPage() {
           ))}
         </section>
 
-        <p className="text-[11px] text-ink-muted flex gap-1.5">
-          <Info size={13} className="shrink-0 mt-px" />
-          <span>{t('recap.disclaimer')}</span>
-        </p>
+        <p className="text-[11px] text-ink-muted text-center">{t('recap.basisShort')}</p>
       </>
     )
   }

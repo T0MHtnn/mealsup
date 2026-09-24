@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Clock,
-  Utensils,
-  Cookie,
-  Moon,
   Plus,
   Minus,
   X,
@@ -33,13 +30,9 @@ import LoadingSpinner from '@/components/common/LoadingSpinner'
 import RecipePickerModal from '@/components/RecipePickerModal'
 import NotificationPrompt from '@/components/NotificationPrompt'
 import Logo from '@/components/common/Logo'
+import RecipeImage from '@/components/common/RecipeImage'
 
-const MEAL_SLOTS: { key: MealSlot; icon: typeof Clock; tint: string }[] = [
-  { key: 'breakfast', icon: Clock, tint: 'bg-tint-sand' },
-  { key: 'lunch', icon: Utensils, tint: 'bg-tint-sage' },
-  { key: 'snack', icon: Cookie, tint: 'bg-tint-sand' },
-  { key: 'dinner', icon: Moon, tint: 'bg-tint-clay' },
-]
+const MEAL_SLOTS: { key: MealSlot }[] = [{ key: 'breakfast' }, { key: 'lunch' }, { key: 'snack' }, { key: 'dinner' }]
 
 // Tap water used in recipes is not something to buy
 const PANTRY_WATER = /^eau( (tiede|glacee|froide|chaude|bouillante))?$/
@@ -281,7 +274,7 @@ export default function DashboardPage() {
       <p className="text-xs text-ink-muted text-center mb-4">{planMessage ?? t('planner.hint')}</p>
 
       <div className="space-y-3">
-        {MEAL_SLOTS.map(({ key, icon: Icon, tint }) => {
+        {MEAL_SLOTS.map(({ key }) => {
           const entry = entriesForSelectedDay.get(key)
           const recipe = entry?.recipes
 
@@ -291,8 +284,8 @@ export default function DashboardPage() {
               <div key={key} className="bg-surface-200 border border-border rounded-md">
                 <div className="p-3 flex items-center gap-3">
                   <Link to={`/recipes/${recipe.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className={`w-11 h-11 rounded-sm flex items-center justify-center shrink-0 ${tint}`}>
-                      <Icon size={18} className="text-primary" />
+                    <div className="relative w-14 h-14 rounded-sm overflow-hidden shrink-0">
+                      <RecipeImage recipe={recipe} iconSize={18} />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs text-ink-muted">{t(`dashboard.mealType.${key}` as TranslationKey)}</p>
@@ -374,14 +367,21 @@ export default function DashboardPage() {
         })}
       </div>
 
-      <button
-        onClick={handleGenerateList}
-        disabled={isGenerating || weekPlan.length === 0}
-        className="w-full mt-6 py-3 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong disabled:opacity-40 flex items-center justify-center gap-2"
-      >
-        <Check size={18} />
-        {generated ? t('dashboard.listGenerated') : t('dashboard.generateList')}
-      </button>
+      {weekPlan.length > 0 ? (
+        <button
+          onClick={handleGenerateList}
+          disabled={isGenerating}
+          className="w-full mt-6 py-3 bg-primary text-white rounded-full font-display font-semibold hover:bg-primary-strong disabled:opacity-40 flex items-center justify-center gap-2"
+        >
+          <Check size={18} />
+          {generated ? t('dashboard.listGenerated') : t('dashboard.generateList')}
+        </button>
+      ) : (
+        // Nothing planned yet: say how to start instead of a button that can't do anything
+        <p className="mt-6 text-sm text-ink-muted text-center bg-surface-200 border border-dashed border-border rounded-md px-4 py-3">
+          {t('dashboard.emptyWeek')}
+        </p>
+      )}
 
       <Link
         to="/recap"

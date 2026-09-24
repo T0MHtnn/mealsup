@@ -14,6 +14,7 @@ import LanguageSwitch from '@/components/common/LanguageSwitch'
 import EditProfileModal from '@/components/EditProfileModal'
 import Modal from '@/components/common/Modal'
 import NotificationSettings from '@/components/NotificationSettings'
+import AccountDataSection from '@/components/AccountDataSection'
 
 const THEME_OPTIONS: { value: Theme; icon: typeof Sun }[] = [
   { value: 'light', icon: Sun },
@@ -486,6 +487,8 @@ export default function ProfilePage() {
           {feedbackState === 'sending' ? t('profile.contactSending') : t('profile.contactSend')}
         </button>
       </form>
+
+      <AccountDataSection />
 
       <button
         onClick={handleLogout}

@@ -19,6 +19,7 @@ const ShoppingPage = lazy(() => import('@/pages/Shopping'))
 const ProfilePage = lazy(() => import('@/pages/Profile'))
 const HelpPage = lazy(() => import('@/pages/Help'))
 const RecapPage = lazy(() => import('@/pages/Recap'))
+const LegalPage = lazy(() => import('@/pages/Legal'))
 const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsers'))
 const AdminFeedbacksPage = lazy(() => import('@/pages/admin/AdminFeedbacks'))
 const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfile'))
@@ -73,6 +74,7 @@ function App() {
           <>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/legal/:doc" element={<LegalPage />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </>
         ) : (
@@ -81,12 +83,14 @@ function App() {
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/feedbacks" element={<AdminFeedbacksPage />} />
               <Route path="/admin/profile" element={<AdminProfilePage />} />
+              <Route path="/legal/:doc" element={<LegalPage />} />
               <Route path="*" element={<Navigate to="/admin/users" replace />} />
             </Route>
           ) : (
           <>
             {/* Full screen, without the navigation bar */}
             <Route path="/recipes/:id/cook" element={<CookModePage />} />
+            <Route path="/legal/:doc" element={<LegalPage />} />
             <Route element={<MainLayout />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/fridge" element={<FridgePage />} />

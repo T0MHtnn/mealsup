@@ -3,7 +3,6 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   Heart,
   Clock,
-  Utensils,
   SlidersHorizontal,
   ArrowUp,
   ArrowDown,
@@ -34,15 +33,7 @@ import { recipeNutritionPerServing } from '@/utils/nutrition'
 import { ingredientKey, recipeIngredientKeys } from '@/utils/ingredients'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import SearchInput from '@/components/common/SearchInput'
-
-const HERO_TINTS = ['bg-tint-sage', 'bg-tint-sand', 'bg-tint-clay']
-
-function heroTintFor(recipe: any) {
-  const tags: string[] = recipe.tags || []
-  if (tags.includes('petit-déjeuner')) return 'bg-tint-sand'
-  if (tags.includes('dessert') || tags.includes('bbq')) return 'bg-tint-clay'
-  return HERO_TINTS[recipe.title.length % HERO_TINTS.length]
-}
+import RecipeImage from '@/components/common/RecipeImage'
 
 type SortKey = 'default' | 'time' | 'difficulty' | 'rating'
 const SORT_OPTIONS: SortKey[] = ['default', 'time', 'difficulty', 'rating']
@@ -327,7 +318,6 @@ export default function RecipesPage() {
                 </span>
               </button>
             ))}
-            <p className="text-[11px] text-ink-muted px-2 pt-1">{t('nutrition.disclaimer')}</p>
           </div>
         </div>
       )}
@@ -352,8 +342,8 @@ export default function RecipesPage() {
                 to={`/recipes/${recipe.id}`}
                 className="bg-surface-200 border border-border rounded-md overflow-hidden flex flex-col"
               >
-                <div className={`relative h-24 flex items-center justify-center ${heroTintFor(recipe)}`}>
-                  <Utensils className="text-primary" size={26} strokeWidth={1.75} />
+                <div className="relative h-28">
+                  <RecipeImage recipe={recipe} />
                   {recipe.created_by && recipe.created_by === userId && (
                     <span className="absolute bottom-1.5 left-1.5 text-[10px] font-semibold text-white bg-accent px-2 py-0.5 rounded-full">
                       {t('recipes.mine')}
@@ -388,8 +378,8 @@ export default function RecipesPage() {
                   </div>
                   <button
                     onClick={(e) => toggleFavorite(e, recipe.id)}
-                    aria-label="Toggle favorite"
-                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-surface-200 flex items-center justify-center text-primary"
+                    aria-label={t('recipes.toggleFavorite')}
+                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-surface-200 shadow flex items-center justify-center text-primary"
                   >
                     <Heart size={14} fill={isFav ? 'currentColor' : 'none'} />
                   </button>

@@ -16,9 +16,11 @@ import { isFridgeFood, suggestedExpiry } from '@/utils/shelfLife'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import Modal from '@/components/common/Modal'
 import FoodWarningBadge from '@/components/common/FoodWarningBadge'
+import InfoButton from '@/components/common/InfoButton'
 
 /** Quantity you can type directly instead of tapping "+" many times; saved on blur / Enter. */
 function QuantityInput({ value, onCommit }: { value: number; onCommit: (quantity: number) => void }) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState(String(value))
   useEffect(() => setDraft(String(value)), [value])
 
@@ -38,7 +40,7 @@ function QuantityInput({ value, onCommit }: { value: number; onCommit: (quantity
       onFocus={(e) => e.target.select()}
       onBlur={commit}
       onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-      aria-label="Quantité"
+      aria-label={t('common.quantity')}
       className="w-12 text-center text-sm font-display font-semibold text-ink bg-transparent border border-border rounded-sm py-0.5"
     />
   )
@@ -363,7 +365,7 @@ export default function ShoppingPage() {
                     <button
                       onClick={() => setQuantity(name, qty - 1)}
                       disabled={qty === 0}
-                      aria-label="Decrease"
+                      aria-label={t('common.decrease')}
                       className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-ink disabled:opacity-30"
                     >
                       <Minus size={13} />
@@ -374,7 +376,7 @@ export default function ShoppingPage() {
                     </span>
                     <button
                       onClick={() => setQuantity(name, qty + 1)}
-                      aria-label="Increase"
+                      aria-label={t('common.increase')}
                       className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white"
                     >
                       <Plus size={13} />
@@ -385,7 +387,10 @@ export default function ShoppingPage() {
             })}
           </div>
 
-          <p className="text-[11px] text-ink-muted mt-3">{t('prices.disclaimer')}</p>
+          <p className="text-[11px] text-ink-muted mt-3 flex items-center gap-1.5">
+            {t('prices.indicative')}
+            <InfoButton title={t('prices.infoTitle')} paragraphs={[t('prices.disclaimer'), t('prices.infoStore')]} size={13} />
+          </p>
 
           <form onSubmit={handleAddCustom} className="flex gap-2 mt-3">
             <input
@@ -418,10 +423,12 @@ export default function ShoppingPage() {
 
           <div className="bg-tint-sand rounded-md px-3 py-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-display font-semibold text-ink">{t('prices.estimatedTotal')}</span>
+              <span className="text-sm font-display font-semibold text-ink flex items-center gap-1.5">
+                {t('prices.estimatedTotal')}
+                <InfoButton title={t('prices.infoTitle')} paragraphs={[t('prices.disclaimer'), t('prices.infoStore')]} />
+              </span>
               <span className="text-sm font-display font-bold text-ink">≈ {formatEuros(estimatedTotal)}</span>
             </div>
-            <p className="text-[11px] text-ink-muted mt-0.5">{t('prices.disclaimer')}</p>
           </div>
 
           {grouped.map((group) => {

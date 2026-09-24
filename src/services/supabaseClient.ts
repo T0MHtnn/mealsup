@@ -115,6 +115,9 @@ export interface RecipeInput {
   tags: string[]
   equipment_needed: string[]
   instructions: string[]
+  image_url?: string | null
+  image_credit?: string | null
+  image_source_url?: string | null
 }
 
 export interface RecipeIngredientInput {
@@ -414,6 +417,70 @@ export const storageService = {
     if (error) throw error
     const { data } = supabase.storage.from('avatars').getPublicUrl(path)
     return `${data.publicUrl}?t=${Date.now()}`
+  },
+
+  /** Photo of an own recipe, in the user's folder of the recipe-images bucket. */
+  uploadRecipeImage: async (userId: string, file: Blob) => {
+    const path = `${userId}/${crypto.randomUUID()}.jpg`
+    const { error } = await supabase.storage
+      .from('recipe-images')
+      .upload(path, file, { contentType: 'image/jpeg', cacheControl: '31536000' })
+    if (error) throw error
+    return supabase.storage.from('recipe-images').getPublicUrl(path).data.publicUrl
+  },
+
+  /** Deletes a photo uploaded with uploadRecipeImage (other URLs are ignored). */
+  removeRecipeImage: async (url: string | null | undefined) => {
+    const marker = '/storage/v1/object/public/recipe-images/'
+    const index = url?.indexOf(marker) ?? -1
+    if (!url || index < 0) return
+    await supabase.storage.from('recipe-images').remove([decodeURIComponent(url.slice(index + marker.length))])
+  },
+
+  /** Every file of a user (profile photo, recipe photos), before deleting the account. */
+  removeAllUserFiles: async (userId: string) => {
+    for (const bucket of ['avatars', 'recipe-images']) {
+      const { data } = await supabase.storage.from(bucket).list(userId, { limit: 1000 })
+      const paths = (data || []).map((file) => `${userId}/${file.name}`)
+      if (paths.length > 0) await supabase.storage.from(bucket).remove(paths)
+    }
+  },
+}
+
+// ============ COMPTE : EXPORT ET SUPPRESSION (RGPD) ============
+
+export const accountService = {
+  /** All the user's data in one object (right of access / portability). */
+  exportData: async (userId: string) => {
+    const read = async (query: PromiseLike<{ data: any; error: any }>) => {
+      const { data, error } = await query
+      return error ? [] : data || []
+    }
+    const lists = await read(supabase.from('shopping_lists').select('*').eq('user_id', userId))
+    return {
+      exported_at: new Date().toISOString(),
+      profile: (await read(supabase.from('users').select('*').eq('id', userId)))[0] ?? null,
+      fridge: await read(supabase.from('fridge_items').select('*').eq('user_id', userId)),
+      meal_plan: await read(supabase.from('planned_meals').select('meal_date, meal_type, servings, recipes(title)').eq('user_id', userId)),
+      favorites: await read(supabase.from('favorite_recipes').select('created_at, recipes(title)').eq('user_id', userId)),
+      ratings: await read(supabase.from('recipe_ratings').select('rating, note, updated_at, recipes(title)').eq('user_id', userId)),
+      shopping_lists: lists,
+      shopping_list_items: lists.length
+        ? await read(supabase.from('shopping_list_items').select('*').in('shopping_list_id', lists.map((l: any) => l.id)))
+        : [],
+      purchase_history: await read(supabase.from('purchase_history').select('*').eq('user_id', userId)),
+      own_recipes: await read(supabase.from('recipes').select('*, recipe_ingredients(*)').eq('created_by', userId)),
+      notification_devices: await read(supabase.from('push_subscriptions').select('endpoint, created_at').eq('user_id', userId)),
+    }
+  },
+
+  /** Deletes the account and everything attached to it, then signs out. */
+  deleteAccount: async (userId: string) => {
+    await storageService.removeAllUserFiles(userId)
+    const { error } = await supabase.rpc('delete_my_account')
+    if (error) throw error
+    clearCache()
+    await supabase.auth.signOut().catch(() => {})
   },
 }
 

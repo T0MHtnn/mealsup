@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslation } from '@/hooks/useTranslation'
 
 interface ModalProps {
   title: string
@@ -10,6 +11,7 @@ interface ModalProps {
 }
 
 export default function Modal({ title, onClose, children, tall = false }: ModalProps) {
+  const { t } = useTranslation()
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -20,7 +22,7 @@ export default function Modal({ title, onClose, children, tall = false }: ModalP
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <h2 className="font-display font-semibold text-ink">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="p-1 text-ink-muted hover:text-ink">
+          <button onClick={onClose} aria-label={t('common.close')} className="p-1 text-ink-muted hover:text-ink">
             <X size={20} />
           </button>
         </div>

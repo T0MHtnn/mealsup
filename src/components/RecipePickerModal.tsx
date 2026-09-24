@@ -9,6 +9,7 @@ import { formatDuration } from '@/utils/date'
 import { SLOT_CATEGORIES, isRecipeInCategory, type MealSlot } from '@/constants/mealCategories'
 import Modal from '@/components/common/Modal'
 import SearchInput from '@/components/common/SearchInput'
+import RecipeImage from '@/components/common/RecipeImage'
 
 interface RecipePickerModalProps {
   title: string
@@ -83,9 +84,12 @@ export default function RecipePickerModal({ title, slot, onClose, onSelect }: Re
             <button
               key={recipe.id}
               onClick={() => onSelect(recipe)}
-              className="w-full flex items-center justify-between px-3 py-2.5 rounded-sm border border-border hover:bg-surface-100 text-left"
+              className="w-full flex items-center justify-between gap-2.5 p-1.5 pr-3 rounded-sm border border-border hover:bg-surface-100 text-left"
             >
-              <span className="text-sm text-ink font-medium flex items-center gap-1.5 min-w-0">
+              <span className="relative w-11 h-11 rounded-sm overflow-hidden shrink-0">
+                <RecipeImage recipe={recipe} iconSize={16} />
+              </span>
+              <span className="flex-1 text-sm text-ink font-medium flex items-center gap-1.5 min-w-0">
                 {favoriteIds.has(recipe.id) && <Heart size={12} className="text-primary shrink-0" fill="currentColor" />}
                 {recipeHasWarning(recipe) && (
                   <AlertTriangle size={13} className="text-danger shrink-0" aria-label={t('warning.recipe')} />

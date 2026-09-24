@@ -624,3 +624,67 @@ DROP POLICY IF EXISTS "Users delete their own avatar" ON storage.objects;
 CREATE POLICY "Users delete their own avatar"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+
+-- ============ PHOTOS DES RECETTES ============
+
+-- URL de la photo + crédit affiché sous la photo (auteur, licence) quand elle
+-- n'appartient pas à l'utilisateur (photos libres de Wikimedia Commons pour
+-- les recettes de base, voir seed.sql).
+ALTER TABLE recipes ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE recipes ADD COLUMN IF NOT EXISTS image_credit TEXT;
+ALTER TABLE recipes ADD COLUMN IF NOT EXISTS image_source_url TEXT;
+
+-- Photos des recettes perso : un dossier par utilisateur ({user_id}/...)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('recipe-images', 'recipe-images', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Recipe images are publicly readable" ON storage.objects;
+CREATE POLICY "Recipe images are publicly readable"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'recipe-images');
+
+DROP POLICY IF EXISTS "Users upload their own recipe images" ON storage.objects;
+CREATE POLICY "Users upload their own recipe images"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'recipe-images' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+DROP POLICY IF EXISTS "Users update their own recipe images" ON storage.objects;
+CREATE POLICY "Users update their own recipe images"
+  ON storage.objects FOR UPDATE
+  USING (bucket_id = 'recipe-images' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+DROP POLICY IF EXISTS "Users delete their own recipe images" ON storage.objects;
+CREATE POLICY "Users delete their own recipe images"
+  ON storage.objects FOR DELETE
+  USING (bucket_id = 'recipe-images' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+
+-- ============ SUPPRESSION DE SON PROPRE COMPTE (RGPD) ============
+
+-- Appelée depuis le Profil. Les fichiers (photo de profil, photos de recettes)
+-- sont supprimés avant par l'app via l'API Storage (Supabase interdit de les
+-- supprimer en SQL).
+CREATE OR REPLACE FUNCTION public.delete_my_account()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  me uuid := auth.uid();
+BEGIN
+  IF me IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+  -- ses recettes privées disparaissent avec lui
+  DELETE FROM public.recipes WHERE created_by = me;
+  -- ses messages restent lisibles par l'admin, mais sans son e-mail
+  UPDATE public.feedback SET email = NULL WHERE user_id = me;
+  -- supprime en cascade son profil, frigo, planning, courses, favoris, avis...
+  DELETE FROM auth.users WHERE id = me;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.delete_my_account() FROM anon;
