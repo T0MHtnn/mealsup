@@ -88,7 +88,7 @@ export const HELP: Record<'fr' | 'en', HelpContent> = {
         id: 'shopping',
         title: 'Faire tes courses (Courses)',
         items: [
-          'Onglet Ingrédients : ajoute des produits par rayon ; touche le nombre pour saisir une quantité.',
+          'Onglet Ingrédients : cherche parmi plus de 1 500 produits (alimentaires ou non) ou parcours-les par rayon ; touche le nombre pour saisir une quantité.',
           'Onglet Liste : coche les articles au fur et à mesure. Ça marche aussi sans réseau, tout se synchronise ensuite.',
           'Le badge « Frigo » indique ce que tu as déjà chez toi.',
           '« Terminer mes courses » archive la liste dans l\'historique et range les produits achetés dans ton frigo.',
@@ -188,7 +188,7 @@ export const HELP: Record<'fr' | 'en', HelpContent> = {
         id: 'shopping',
         title: 'Do your shopping (Shopping)',
         items: [
-          'Ingredients tab: add products by aisle; tap the number to type a quantity.',
+          'Ingredients tab: search more than 1,500 products (food or not) or browse them by aisle; tap the number to type a quantity.',
           'List tab: tick items as you go. It also works offline and syncs afterwards.',
           'The "Fridge" badge shows what you already have at home.',
           '"Finish shopping" archives the list and puts the bought food in your fridge.',

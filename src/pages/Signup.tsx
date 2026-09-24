@@ -4,6 +4,9 @@ import { authService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import LanguageSwitch from '@/components/common/LanguageSwitch'
 import Logo from '@/components/common/Logo'
+import ResendConfirmation from '@/components/ResendConfirmation'
+import { authErrorKey } from '@/utils/authErrors'
+import { MailCheck } from 'lucide-react'
 
 export default function SignupPage() {
   const { t } = useTranslation()
@@ -29,7 +32,7 @@ export default function SignupPage() {
       await authService.signUp(email, password, username)
       setSuccess(true)
     } catch (err: any) {
-      setError(err.message)
+      setError(t(authErrorKey(err)))
     } finally {
       setIsLoading(false)
     }
@@ -48,8 +51,12 @@ export default function SignupPage() {
         </div>
 
         {success ? (
-          <div className="p-4 bg-tint-sage border border-primary rounded-sm text-primary-strong text-sm text-center">
-            {t('auth.checkEmail')}
+          <div className="p-4 bg-tint-sage border border-primary rounded-sm text-center space-y-3">
+            <MailCheck size={32} className="mx-auto text-primary" />
+            <p className="font-display font-semibold text-ink">{t('auth.checkEmailTitle')}</p>
+            <p className="text-sm text-ink">{t('auth.checkEmailText', { email })}</p>
+            <p className="text-xs text-ink-muted">{t('auth.checkEmailHint')}</p>
+            <ResendConfirmation email={email} />
           </div>
         ) : (
           <>

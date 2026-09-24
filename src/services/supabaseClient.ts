@@ -17,16 +17,33 @@ const USER_TTL = 5 * 60 * 1000
 // ============ AUTH ============
 
 export const authService = {
+  /**
+   * Creates the account and sends the confirmation e-mail: the account only
+   * becomes active once the link in it has been clicked.
+   */
   signUp: async (email: string, password: string, username: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { username },
+        emailRedirectTo: `${window.location.origin}/`,
       },
     })
     if (error) throw error
+    // Already registered and confirmed: Supabase answers without error but with no identity
+    if (data.user && data.user.identities?.length === 0) throw { code: 'user_already_exists' }
     return data
+  },
+
+  /** Sends the confirmation e-mail again (link expired or not received). */
+  resendConfirmation: async (email: string) => {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    })
+    if (error) throw error
   },
 
   signIn: async (email: string, password: string) => {

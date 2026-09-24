@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Refrigerator } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
-import { FOOD_CATEGORIES, GROCERY_CATALOG } from '@/constants/groceryCatalog'
+import { FOOD_CATEGORIES, GENERIC_FOODS, GROCERY_CATALOG } from '@/constants/groceryCatalog'
 import { normalizeText } from '@/utils/text'
 import { classifyGroceryItem } from '@/utils/groceryCategory'
 import { ingredientKey } from '@/utils/ingredients'
 
-// Clean product names to pick from: the food part of the shopping catalog
-const FOOD_NAMES = Array.from(new Set(FOOD_CATEGORIES.flatMap((cat) => GROCERY_CATALOG[cat])))
+// Clean names to pick from: generic foods first (« Œufs »), then the food products of the shopping catalog
+const FOOD_NAMES = Array.from(
+  new Set(FOOD_CATEGORIES.flatMap((cat) => [...(GENERIC_FOODS[cat] ?? []), ...GROCERY_CATALOG[cat]]))
+)
 
 /** "Œufs" / "oeuf", "Pommes de terre" / "pomme de" compare equal: no accents, œ -> oe, no plural s/x. */
 function comparable(text: string) {

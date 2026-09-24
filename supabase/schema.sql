@@ -45,12 +45,17 @@ ALTER TABLE users ALTER COLUMN allergies SET DEFAULT '[]'::jsonb;
 ALTER TABLE users ALTER COLUMN dietary_restrictions SET DEFAULT '[]'::jsonb;
 
 -- Création automatique du profil à l'inscription
+-- Le profil MealsUp n'est créé qu'une fois l'adresse e-mail confirmée (lien
+-- reçu par e-mail). Un compte Google est confirmé dès sa création.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
+  IF NEW.email_confirmed_at IS NULL THEN
+    RETURN NEW;
+  END IF;
   INSERT INTO public.users (id, email, username, allergies, preferences, dietary_restrictions, role)
   VALUES (
     NEW.id,
@@ -71,12 +76,50 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Rattrapage : profil manquant pour les comptes déjà inscrits
+-- Clic sur le lien de confirmation : le compte devient actif
+DROP TRIGGER IF EXISTS on_auth_user_confirmed ON auth.users;
+CREATE TRIGGER on_auth_user_confirmed
+  AFTER UPDATE OF email_confirmed_at ON auth.users
+  FOR EACH ROW
+  WHEN (OLD.email_confirmed_at IS NULL AND NEW.email_confirmed_at IS NOT NULL)
+  EXECUTE FUNCTION public.handle_new_user();
+
+-- Rattrapage : profil manquant pour les comptes confirmés déjà inscrits
 INSERT INTO public.users (id, email, username, allergies, preferences, dietary_restrictions)
 SELECT au.id, au.email, split_part(au.email, '@', 1), '[]'::jsonb, '{}'::jsonb, '[]'::jsonb
 FROM auth.users au
 LEFT JOIN public.users pu ON pu.id = au.id
-WHERE pu.id IS NULL;
+WHERE pu.id IS NULL AND au.email_confirmed_at IS NOT NULL;
+
+-- Comptes jamais confirmés : supprimés au bout de 30 jours (il faudra se réinscrire).
+-- Tâche planifiée chaque nuit à 3 h UTC (extension pg_cron).
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+CREATE OR REPLACE FUNCTION public.delete_unconfirmed_accounts()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  removed integer;
+BEGIN
+  DELETE FROM auth.users
+  WHERE email_confirmed_at IS NULL
+    AND created_at < now() - interval '30 days';
+  GET DIAGNOSTICS removed = ROW_COUNT;
+  RETURN removed;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.delete_unconfirmed_accounts() FROM PUBLIC, anon, authenticated;
+
+-- Même nom = la tâche existante est remplacée (fichier rejouable)
+SELECT cron.schedule(
+  'mealsup-delete-unconfirmed-accounts',
+  '0 3 * * *',
+  'SELECT public.delete_unconfirmed_accounts()'
+);
 
 
 -- ============ ADMINISTRATION ============
@@ -273,8 +316,68 @@ CREATE TABLE IF NOT EXISTS recipe_ingredients (
 
 ALTER TABLE recipe_ingredients ADD COLUMN IF NOT EXISTS ingredient_id UUID REFERENCES ingredients(id);
 
+-- Un ingrédient = une seule ligne, quelle que soit l'écriture : « Oignons », « oignon »
+-- et « OIGNON » ont la même clé (sans accents, sans majuscules, sans pluriel).
+CREATE OR REPLACE FUNCTION public.ingredient_norm(txt TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT btrim(regexp_replace(
+    regexp_replace(
+      translate(replace(replace(lower(coalesce(txt, '')), 'œ', 'oe'), 'æ', 'ae'),
+                'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ', 'aaaaaaceeeeiiiinooooouuuuyy'),
+      '[^a-z0-9]+', ' ', 'g'),
+    '([a-z]{3,})[sx]( |$)', '\1\2', 'g'))
+$$;
+
+ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS norm_key TEXT;
+
+CREATE OR REPLACE FUNCTION public.set_ingredient_norm()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.norm_key := public.ingredient_norm(NEW.name);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS ingredients_set_norm ON ingredients;
+CREATE TRIGGER ingredients_set_norm
+  BEFORE INSERT OR UPDATE OF name ON ingredients
+  FOR EACH ROW EXECUTE FUNCTION public.set_ingredient_norm();
+
+UPDATE ingredients SET norm_key = public.ingredient_norm(name)
+WHERE norm_key IS DISTINCT FROM public.ingredient_norm(name);
+
+-- Fusion des doublons déjà en base : on garde celui du catalogue (qui a un rayon),
+-- sinon le nom le plus court ; les recettes sont reliées à celui qu'on garde.
+WITH ranked AS (
+  SELECT id, first_value(id) OVER (
+    PARTITION BY norm_key ORDER BY (category IS NULL), length(name), name
+  ) AS keep_id
+  FROM ingredients
+)
+UPDATE recipe_ingredients ri
+SET ingredient_id = r.keep_id
+FROM ranked r
+WHERE ri.ingredient_id = r.id AND r.id <> r.keep_id;
+
+WITH ranked AS (
+  SELECT id, first_value(id) OVER (
+    PARTITION BY norm_key ORDER BY (category IS NULL), length(name), name
+  ) AS keep_id
+  FROM ingredients
+)
+DELETE FROM ingredients i
+USING ranked r
+WHERE i.id = r.id AND r.id <> r.keep_id;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ingredients_norm_key ON ingredients (norm_key);
+
 -- Chaque ligne insérée / modifiée est reliée au catalogue "ingredients"
--- (l'ingrédient y est créé s'il n'existe pas encore).
+-- (l'ingrédient y est créé s'il n'existe pas encore, sous l'écriture de la recette).
 CREATE OR REPLACE FUNCTION link_recipe_ingredient()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -289,10 +392,15 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  INSERT INTO ingredients (name) VALUES (clean_name)
-  ON CONFLICT (name) DO NOTHING;
-
-  SELECT id INTO NEW.ingredient_id FROM ingredients WHERE name = clean_name;
+  SELECT id INTO NEW.ingredient_id FROM ingredients WHERE norm_key = public.ingredient_norm(clean_name);
+  IF NEW.ingredient_id IS NULL THEN
+    INSERT INTO ingredients (name) VALUES (clean_name)
+    ON CONFLICT (norm_key) DO NOTHING
+    RETURNING id INTO NEW.ingredient_id;
+    IF NEW.ingredient_id IS NULL THEN
+      SELECT id INTO NEW.ingredient_id FROM ingredients WHERE norm_key = public.ingredient_norm(clean_name);
+    END IF;
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -305,15 +413,16 @@ CREATE TRIGGER recipe_ingredients_link_ingredient
 
 -- Rattrapage : relie les lignes déjà présentes
 INSERT INTO ingredients (name)
-SELECT DISTINCT btrim(ingredient_name)
+SELECT DISTINCT ON (public.ingredient_norm(btrim(ingredient_name))) btrim(ingredient_name)
 FROM recipe_ingredients
 WHERE ingredient_name IS NOT NULL AND btrim(ingredient_name) <> ''
-ON CONFLICT (name) DO NOTHING;
+ORDER BY public.ingredient_norm(btrim(ingredient_name)), length(btrim(ingredient_name))
+ON CONFLICT (norm_key) DO NOTHING;
 
 UPDATE recipe_ingredients ri
 SET ingredient_id = i.id
 FROM ingredients i
-WHERE i.name = btrim(ri.ingredient_name)
+WHERE i.norm_key = public.ingredient_norm(btrim(ri.ingredient_name))
   AND ri.ingredient_id IS DISTINCT FROM i.id;
 
 

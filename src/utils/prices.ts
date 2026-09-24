@@ -1,5 +1,6 @@
 // Estimation de prix À TITRE INDICATIF — voir l'avertissement dans constants/prices.ts
 import { CATEGORY_FALLBACK_PRICE, PRICE_TABLE, type PriceEntry } from '@/constants/prices'
+import { CATALOG_PRICES } from '@/constants/catalogPrices'
 import { classifyGroceryItem, simplify } from '@/utils/groceryCategory'
 import { formatAmount, isToTaste } from '@/utils/quantity'
 
@@ -64,6 +65,19 @@ const PATTERNS = PRICE_TABLE.map((entry) => ({
   patterns: entry.keywords.map((kw) => new RegExp(`(^| )${kw}(s|x)?( |$)`)),
 }))
 
+/** Price of an exact product of the catalog ("Ingrédients" tab), with its usual pack. */
+function catalogEntry(simple: string): PriceEntry | undefined {
+  const catalog = CATALOG_PRICES[simple]
+  if (!catalog) return undefined
+  const [price, per, packQty, packUnit, unitKg] = catalog
+  return { keywords: [simple], price, per, pack: { qty: packQty, unit: packUnit }, unitKg }
+}
+
+/** For a shopping line picked in the catalog: the product's own price, else the general estimate. */
+function shoppingEntry(name: string): PriceEntry {
+  return catalogEntry(simplify(name)) ?? entryFor(name)
+}
+
 const matchCache = new Map<string, { entry: PriceEntry; keyword: string | null }>()
 
 function match(name: string) {
@@ -78,6 +92,9 @@ function match(name: string) {
       break
     }
   }
+  // Not in the table: a product of the catalog has its own price
+  const catalog = result ? undefined : catalogEntry(simple)
+  if (catalog) result = { entry: catalog, keyword: simple }
   if (!result) {
     const fallback = CATEGORY_FALLBACK_PRICE[classifyGroceryItem(name)]
     result = { entry: fallback ? { keywords: [], price: fallback, per: 'kg' } : { keywords: [], price: 4, per: 'unit' }, keyword: null }
@@ -115,7 +132,7 @@ export function estimateShoppingItemCost(name: string, quantity: number | null |
   // A line coming from a recipe has a unit ("200 g", "2 pièces"): price that amount.
   // Only lines without unit (added from the catalog) are counted in usual packs.
   if (u) return estimateIngredientCost(name, quantity, u)
-  const entry = entryFor(name)
+  const entry = shoppingEntry(name)
   const pack = packOf(entry)
   const count = Number(quantity) > 0 ? Number(quantity) : 1
   return count * costOf(entry, toAmount(pack.qty, pack.unit))
@@ -123,7 +140,7 @@ export function estimateShoppingItemCost(name: string, quantity: number | null |
 
 /** "≈ 2,50 € · 250 g" : price of the usual pack of a catalog product. */
 export function catalogPackLabel(name: string, factor: number): string {
-  const entry = entryFor(name)
+  const entry = shoppingEntry(name)
   const pack = packOf(entry)
   const price = costOf(entry, toAmount(pack.qty, pack.unit)) * factor
   return `${formatEstimate(price)} · ${formatAmount(pack.qty, pack.unit)}`

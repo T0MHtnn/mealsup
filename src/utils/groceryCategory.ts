@@ -1,4 +1,4 @@
-import { GROCERY_CATALOG, GROCERY_CATEGORIES, type GroceryCategory } from '@/constants/groceryCatalog'
+import { GENERIC_FOODS, GROCERY_CATALOG, GROCERY_CATEGORIES, type GroceryCategory } from '@/constants/groceryCatalog'
 import { normalizeText } from '@/utils/text'
 
 /** Lowercase, no accents, "œ" -> "oe", punctuation -> spaces: "Huile d'olive" -> "huile d olive". */
@@ -15,6 +15,24 @@ type Rule = [keywords: string[], category: GroceryCategory]
 // Checked in order, first match wins: specific phrases come before the generic
 // words they contain ("lait de coco" before "lait", "vinaigre" before "vin"...).
 const RULES: Rule[] = [
+  // --- Non alimentaire (avant tout : "crème solaire", "lait infantile", "tampons à récurer"...) ---
+  [['lait infantile', 'lait 1er age', 'lait 2e age', 'petits pots', 'couches', 'lingettes bebe', 'biberon', 'tetine',
+    'liniment', 'gel lavant bebe'], 'Bébé'],
+  [['croquettes', 'patee', 'litiere', 'friandises pour', 'friandises chien', 'friandises chat', 'antiparasitaire',
+    'graines pour oiseaux', 'nourriture pour'], 'Animaux'],
+  [['tampons a recurer', 'lessive', 'adoucissant', 'liquide vaisselle', 'lave vaisselle', 'eponge', 'essuie tout',
+    'sacs poubelle', 'sac poubelle', 'nettoyant', 'javel', 'produit wc', 'gel wc', 'desodorisant', 'detartrant',
+    'deboucheur', 'serpilliere', 'balai', 'torchon', 'papier aluminium', 'film alimentaire', 'papier cuisson',
+    'sacs congelation', 'sacs zip', 'piles', 'ampoule', 'ampoules', 'allumettes', 'bougie', 'bougies', 'briquet',
+    'insecticide', 'microfibre', 'microfibres', 'gants de menage', 'serviettes en papier', 'filtres a cafe',
+    'charbon de bois', 'stylo', 'stylos', 'cahier', 'enveloppes', 'ramette', 'terreau', 'engrais'], 'Entretien & Maison'],
+  [['papier toilette', 'gel douche', 'savon', 'shampoing', 'apres shampoing', 'dentifrice', 'brosse a dents',
+    'brosses a dents', 'bain de bouche', 'fil dentaire', 'deodorant', 'rasoir', 'rasoirs', 'mousse a raser',
+    'creme solaire', 'apres soleil', 'creme hydratante', 'lait corporel', 'demaquillant', 'eau micellaire',
+    'mascara', 'rouge a levres', 'vernis a ongles', 'coton tiges', 'cotons demaquillants', 'coton hydrophile',
+    'mouchoirs', 'serviettes hygieniques', 'tampons', 'protege slips', 'protections hygieniques', 'pansements',
+    'compresses', 'preservatifs', 'gel hydroalcoolique', 'laque', 'coloration'], 'Hygiène & Beauté'],
+
   // --- Phrases spécifiques ---
   [['huile', 'vinaigre', 'lait de coco', 'creme de coco', 'bouillon', 'concentre de tomate', 'tomates concassees',
     'tomates en conserve', 'sauce tomate', 'tomates san marzano', 'confit', 'confites', 'thon au naturel',
@@ -79,7 +97,7 @@ const RULES: Rule[] = [
 
 const CATALOG_INDEX = new Map<string, GroceryCategory>()
 for (const category of GROCERY_CATEGORIES) {
-  for (const item of GROCERY_CATALOG[category]) CATALOG_INDEX.set(simplify(item), category)
+  for (const item of [...(GENERIC_FOODS[category] ?? []), ...GROCERY_CATALOG[category]]) CATALOG_INDEX.set(simplify(item), category)
 }
 
 const COMPILED = RULES.map(([keywords, category]) => ({

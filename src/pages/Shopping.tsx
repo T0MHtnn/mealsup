@@ -5,7 +5,9 @@ import { useAuthStore } from '@/store/authStore'
 import { shoppingService, fridgeService } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useFoodWarnings } from '@/hooks/useFoodWarnings'
-import { GROCERY_CATEGORIES, GROCERY_CATALOG, type GroceryCategory } from '@/constants/groceryCatalog'
+import { GROCERY_CATEGORIES, GROCERY_CATALOG, GROCERY_SECTIONS, type GroceryCategory } from '@/constants/groceryCatalog'
+import SearchInput from '@/components/common/SearchInput'
+import { simplify } from '@/utils/groceryCategory'
 import { normalizeText } from '@/utils/text'
 import { classifyGroceryItem, itemCategory } from '@/utils/groceryCategory'
 import { formatAmount } from '@/utils/quantity'
@@ -79,6 +81,20 @@ export default function ShoppingPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'ingredients' | 'list'>('ingredients')
   const [selectedCategory, setSelectedCategory] = useState<GroceryCategory>(GROCERY_CATEGORIES[0])
+  const [catalogQuery, setCatalogQuery] = useState('')
+
+  // Search across every aisle: each word typed must start a word of the product name
+  const catalogResults = useMemo(() => {
+    const words = simplify(catalogQuery).split(' ').filter(Boolean)
+    if (words.length === 0) return null
+    return GROCERY_CATEGORIES.map((category) => ({
+      category,
+      items: GROCERY_CATALOG[category].filter((name) => {
+        const nameWords = simplify(name).split(' ')
+        return words.every((w) => nameWords.some((nw) => nw.startsWith(w)))
+      }),
+    })).filter((group) => group.items.length > 0)
+  }, [catalogQuery])
   const [customItemName, setCustomItemName] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [showHistory, setShowHistory] = useState(false)
@@ -282,6 +298,49 @@ export default function ShoppingPage() {
 
   if (isLoading) return <LoadingSpinner />
 
+  /** One product of the catalog, with its quantity in the list. */
+  const renderCatalogRow = (name: string, category: GroceryCategory) => {
+    const existing = itemByName.get(normalizeText(name))
+    const qty = Number(existing?.quantity) || 0
+    return (
+      <div
+        key={name}
+        className={`flex items-center justify-between rounded-md border p-3 ${
+          qty > 0 ? 'bg-tint-sage border-primary' : 'bg-surface-200 border-border'
+        }`}
+      >
+        <span className="min-w-0">
+          <span className={`text-sm flex items-center gap-1.5 ${qty > 0 ? 'text-ink font-medium' : 'text-ink-muted'}`}>
+            {name}
+            <FoodWarningBadge flag={foodFlag(name)} />
+          </span>
+          <span className="block text-[11px] text-ink-muted">{packLabel(name)}</span>
+        </span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setQuantity(name, qty - 1, category)}
+            disabled={qty === 0}
+            aria-label={t('common.decrease')}
+            className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-ink disabled:opacity-30"
+          >
+            <Minus size={13} />
+          </button>
+          <span className="flex items-center gap-1">
+            <QuantityInput value={qty} onCommit={(n) => setQuantity(name, n, category)} />
+            {existing?.unit && <span className="text-xs text-ink-muted">{existing.unit}</span>}
+          </span>
+          <button
+            onClick={() => setQuantity(name, qty + 1, category)}
+            aria-label={t('common.increase')}
+            className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white"
+          >
+            <Plus size={13} />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-4 space-y-4">
       {isOffline && (
@@ -331,61 +390,53 @@ export default function ShoppingPage() {
 
       {activeTab === 'ingredients' ? (
         <div>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value as GroceryCategory)}
-            className="w-full px-3 py-2.5 border border-border rounded-sm bg-surface-200 text-ink font-display font-semibold"
-          >
-            {GROCERY_CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+          <SearchInput
+            value={catalogQuery}
+            onChange={setCatalogQuery}
+            placeholder={t('shopping.searchCatalog')}
+            className="mb-2"
+          />
+          {catalogResults ? (
+            catalogResults.length === 0 ? (
+              <p className="text-center text-ink-muted text-sm py-6">{t('shopping.noProduct')}</p>
+            ) : (
+              <div className="space-y-4">
+                {catalogResults.map(({ category, items: products }) => (
+                  <section key={category}>
+                    <h3 className="text-xs font-display font-semibold uppercase tracking-wide text-ink-muted mb-1.5">{category}</h3>
+                    <div className="space-y-1.5">{products.map((name) => renderCatalogRow(name, category))}</div>
+                  </section>
+                ))}
+              </div>
+            )
+          ) : (
+            <>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value as GroceryCategory)}
+                className="w-full px-3 py-2.5 border border-border rounded-sm bg-surface-200 text-ink font-display font-semibold"
+              >
+                {GROCERY_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
 
-          <div className="mt-3 space-y-1.5">
-            {GROCERY_CATALOG[selectedCategory].map((name) => {
-              const existing = itemByName.get(normalizeText(name))
-              const qty = Number(existing?.quantity) || 0
-              return (
-                <div
-                  key={name}
-                  className={`flex items-center justify-between rounded-md border p-3 ${
-                    qty > 0 ? 'bg-tint-sage border-primary' : 'bg-surface-200 border-border'
-                  }`}
-                >
-                  <span className="min-w-0">
-                    <span className={`text-sm flex items-center gap-1.5 ${qty > 0 ? 'text-ink font-medium' : 'text-ink-muted'}`}>
-                      {name}
-                      <FoodWarningBadge flag={foodFlag(name)} />
-                    </span>
-                    <span className="block text-[11px] text-ink-muted">{packLabel(name)}</span>
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setQuantity(name, qty - 1)}
-                      disabled={qty === 0}
-                      aria-label={t('common.decrease')}
-                      className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-ink disabled:opacity-30"
-                    >
-                      <Minus size={13} />
-                    </button>
-                    <span className="flex items-center gap-1">
-                      <QuantityInput value={qty} onCommit={(n) => setQuantity(name, n)} />
-                      {existing?.unit && <span className="text-xs text-ink-muted">{existing.unit}</span>}
-                    </span>
-                    <button
-                      onClick={() => setQuantity(name, qty + 1)}
-                      aria-label={t('common.increase')}
-                      className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white"
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+              <div className="mt-3 space-y-4">
+                {GROCERY_SECTIONS[selectedCategory].map((section) => (
+                  <section key={section.title}>
+                    <h3 className="text-xs font-display font-semibold uppercase tracking-wide text-ink-muted mb-1.5">
+                      {section.title}
+                    </h3>
+                    <div className="space-y-1.5">
+                      {section.items.map((name) => renderCatalogRow(name, selectedCategory))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </>
+          )}
 
           <p className="text-[11px] text-ink-muted mt-3 flex items-center gap-1.5">
             {t('prices.indicative')}

@@ -7,7 +7,7 @@ import { authService, userService, feedbackService } from '@/services/supabaseCl
 import { useTranslation } from '@/hooks/useTranslation'
 import { EQUIPMENT_LIST, type EquipmentKey } from '@/constants/equipment'
 import { DIETARY_RESTRICTIONS, type DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
-import { FOOD_CATEGORIES, GROCERY_CATALOG } from '@/constants/groceryCatalog'
+import { FOOD_CATEGORIES, GENERIC_FOODS } from '@/constants/groceryCatalog'
 import { STORES, type StoreKey } from '@/constants/prices'
 import { normalizeText } from '@/utils/text'
 import LanguageSwitch from '@/components/common/LanguageSwitch'
@@ -23,7 +23,8 @@ const THEME_OPTIONS: { value: Theme; icon: typeof Sun }[] = [
 ]
 
 const EXTRA_EXCLUDABLE = ['Arachides', 'Fruits à coque', 'Gluten', 'Soja', 'Crustacés', 'Mollusques', 'Sésame']
-const EXCLUDABLE_FOODS = Array.from(new Set([...FOOD_CATEGORIES.flatMap((cat) => GROCERY_CATALOG[cat]), ...EXTRA_EXCLUDABLE]))
+// Generic names (« Lait », « Œufs »), not store products (« Œufs x6 »): an exclusion matches every recipe that contains it
+const EXCLUDABLE_FOODS = Array.from(new Set([...FOOD_CATEGORIES.flatMap((cat) => GENERIC_FOODS[cat] ?? []), ...EXTRA_EXCLUDABLE]))
 
 export default function ProfilePage() {
   const { t } = useTranslation()

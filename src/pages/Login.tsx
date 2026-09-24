@@ -5,6 +5,8 @@ import { useTranslation } from '@/hooks/useTranslation'
 import LanguageSwitch from '@/components/common/LanguageSwitch'
 import Logo from '@/components/common/Logo'
 import GoogleIcon from '@/components/common/GoogleIcon'
+import ResendConfirmation from '@/components/ResendConfirmation'
+import { authErrorKey } from '@/utils/authErrors'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -13,10 +15,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notConfirmed, setNotConfirmed] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setNotConfirmed(false)
     setIsLoading(true)
 
     try {
@@ -24,7 +28,9 @@ export default function LoginPage() {
       if (error) throw error
       navigate('/')
     } catch (err: any) {
-      setError(err.message)
+      const key = authErrorKey(err)
+      setNotConfirmed(key === 'auth.error.emailNotConfirmed')
+      setError(t(key))
     } finally {
       setIsLoading(false)
     }
@@ -43,7 +49,7 @@ export default function LoginPage() {
       })
       if (error) throw error
     } catch (err: any) {
-      setError(err.message)
+      setError(t(authErrorKey(err)))
     } finally {
       setIsLoading(false)
     }
@@ -62,8 +68,9 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="p-4 bg-tint-clay border border-danger rounded-sm text-danger text-sm">
-            {error}
+          <div className="p-4 bg-tint-clay border border-danger rounded-sm text-danger text-sm space-y-2">
+            <p>{error}</p>
+            {notConfirmed && <ResendConfirmation email={email} />}
           </div>
         )}
 
