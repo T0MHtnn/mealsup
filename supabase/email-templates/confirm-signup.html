@@ -1,33 +1,49 @@
 <!--
   E-mail « Confirm signup » de Supabase.
-  À coller dans : Authentication → Emails → Templates → Confirm signup (onglet Source).
+  À coller dans : Authentication → Emails → Templates → Confirm signup (onglet Source),
+  à partir de la ligne <!DOCTYPE html>.
   Objet conseillé : Active ton compte MealsUp
-  {{ .ConfirmationURL }} est remplacé par Supabase par le lien d'activation.
+  {{ .ConfirmationURL }} : lien d'activation. {{ .SiteURL }} : adresse de l'app (Site URL de
+  Supabase, Authentication → URL Configuration), qui sert ici à afficher le logo.
 -->
 <!DOCTYPE html>
 <html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Active ton compte MealsUp</title>
+  </head>
   <body style="margin:0;padding:0;background:#FBF8F2;font-family:Arial,Helvetica,sans-serif;color:#1C2A21;">
+    <!-- Aperçu affiché dans la liste des e-mails -->
+    <div style="display:none;max-height:0;overflow:hidden;">Un clic pour activer ton compte MealsUp et planifier tes repas de la semaine.</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FBF8F2;padding:32px 16px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#FFFFFF;border:1px solid #E6E0D4;border-radius:16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#FFFFFF;border:1px solid #E6E0D4;border-radius:16px;overflow:hidden;">
             <tr>
-              <td style="padding:32px 28px 8px;text-align:center;">
-                <p style="margin:0;font-size:22px;font-weight:bold;color:#1F7A46;">MealsUp</p>
+              <td style="background:#1F7A46;height:6px;line-height:6px;font-size:0;">&nbsp;</td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:28px 28px 8px;">
+                <img src="{{ .SiteURL }}/brand/logo-email.png" width="180" alt="MealsUp"
+                     style="display:block;width:180px;max-width:100%;height:auto;border:0;" />
               </td>
             </tr>
             <tr>
-              <td style="padding:8px 28px 0;">
-                <h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;">Bienvenue !</h1>
-                <p style="margin:0 0 20px;font-size:15px;line-height:1.5;">
-                  Merci de t'être inscrit. Il ne reste qu'à confirmer ton adresse e-mail pour activer ton compte.
+              <td style="padding:16px 28px 0;">
+                <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;color:#1C2A21;">Bienvenue sur MealsUp !</h1>
+                <p style="margin:0 0 12px;font-size:15px;line-height:1.55;">
+                  Merci de t'être inscrit. Il ne reste qu'une étape : confirmer ton adresse e-mail pour activer ton compte.
+                </p>
+                <p style="margin:0 0 22px;font-size:15px;line-height:1.55;">
+                  Ensuite, MealsUp t'aide à planifier tes repas de la semaine, à faire ta liste de courses et à gérer ton frigo.
                 </p>
               </td>
             </tr>
             <tr>
               <td align="center" style="padding:0 28px 24px;">
                 <a href="{{ .ConfirmationURL }}"
-                   style="display:inline-block;background:#1F7A46;color:#FFFFFF;text-decoration:none;font-weight:bold;font-size:15px;padding:14px 28px;border-radius:999px;">
+                   style="display:inline-block;background:#1F7A46;color:#FFFFFF;text-decoration:none;font-weight:bold;font-size:15px;padding:14px 30px;border-radius:999px;">
                   Activer mon compte
                 </a>
               </td>
@@ -35,11 +51,11 @@
             <tr>
               <td style="padding:0 28px 28px;">
                 <p style="margin:0 0 10px;font-size:13px;line-height:1.5;color:#5B6B60;">
-                  Le lien est valable 24 heures. S'il a expiré, connecte-toi dans l'app : tu pourras en demander un nouveau.
-                  Sans activation dans les 30 jours, l'inscription est annulée.
+                  Le lien a une durée de validité limitée. S'il a expiré, essaie de te connecter dans l'app :
+                  tu pourras en demander un nouveau. Sans activation dans les 30 jours, l'inscription est annulée.
                 </p>
                 <p style="margin:0;font-size:13px;line-height:1.5;color:#5B6B60;">
-                  Tu n'es pas à l'origine de cette inscription ? Ignore simplement cet e-mail.
+                  Tu n'es pas à l'origine de cette inscription ? Ignore simplement cet e-mail, aucun compte ne sera activé.
                 </p>
               </td>
             </tr>

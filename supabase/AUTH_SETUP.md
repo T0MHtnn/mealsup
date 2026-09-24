@@ -32,30 +32,27 @@ depuis 30 jours) ne doit trouver aucun ancien compte à supprimer.
 
 Le service d'e-mail intégré à Supabase n'envoie qu'aux adresses des membres de
 l'équipe du projet, et 2 e-mails par heure au maximum : les vrais utilisateurs ne
-recevraient rien. Il faut brancher un service d'envoi (SMTP) :
+recevraient rien. Il faut brancher un service d'envoi (SMTP). Le plus simple : **Gmail**.
 
-1. Créer un compte gratuit sur **Brevo** (brevo.com, 300 e-mails/jour gratuits).
-2. Brevo → *Senders, Domains & Dedicated IPs* → ajouter et valider l'adresse
-   d'expédition (par exemple ton adresse e-mail).
-3. Brevo → *SMTP & API* → onglet SMTP : noter le serveur (`smtp-relay.brevo.com`),
-   le port (`587`), l'identifiant, et générer une **clé SMTP**.
-4. Supabase → *Authentication → Emails → SMTP Settings* : activer **Enable Custom SMTP**
+1. Sur le compte Google qui enverra les e-mails, activer la validation en 2 étapes,
+   puis créer un **mot de passe d'application** (myaccount.google.com/apppasswords).
+2. Supabase → *Authentication → Emails → SMTP Settings* : activer **Enable Custom SMTP**
    et renseigner :
-   - Sender email : l'adresse validée à l'étape 2
-   - Sender name : `MealsUp`
-   - Host : `smtp-relay.brevo.com` — Port : `587`
-   - Username : l'identifiant SMTP Brevo — Password : la clé SMTP
-5. Toujours dans *Authentication → Rate Limits*, remonter **Rate limit for sending emails**
+   - Sender email : l'adresse Gmail — Sender name : `MealsUp`
+   - Host : `smtp.gmail.com` — Port : `587`
+   - Username : l'adresse Gmail — Password : le mot de passe d'application
+3. *Authentication → Rate Limits* : remonter **Rate limit for sending emails**
    (par exemple 30 par heure).
 
-(Avec un nom de domaine à toi, Resend ou Brevo avec le domaine authentifié donnent une
-meilleure délivrabilité : moins de risques de finir dans les spams.)
+Gmail suffit pour démarrer (environ 500 e-mails par jour), mais les premiers e-mails
+peuvent arriver dans les spams. Avec un nom de domaine à toi, un service comme Resend
+ou Brevo avec le domaine authentifié donne une meilleure délivrabilité.
 
 ## 3. Durée de validité du lien
 
-*Authentication → Sign In / Providers → Email* : **Email OTP Expiration** = `86400`
-(24 heures, le maximum). Le texte de l'e-mail l'annonce. Si le lien a expiré,
-l'utilisateur en redemande un depuis l'écran de connexion.
+Rien à régler : Supabase garde sa durée par défaut (le réglage « Email OTP Expiration »
+n'apparaît pas sur tous les projets). L'e-mail ne promet pas de durée précise ; si le
+lien a expiré, l'utilisateur en redemande un depuis l'écran de connexion.
 
 ## 4. Adresses autorisées pour le retour dans l'app
 
@@ -68,8 +65,10 @@ l'utilisateur en redemande un depuis l'écran de connexion.
 
 *Authentication → Emails → Templates → Confirm signup* :
 - Subject : `Active ton compte MealsUp`
-- Body : coller le contenu de `supabase/email-templates/confirm-signup.html`
-  (sans le commentaire du début).
+- Body (onglet *Source*) : coller le contenu de `supabase/email-templates/confirm-signup.html`
+  à partir de la ligne `<!DOCTYPE html>` (sans le commentaire du début).
+- Le logo de l'e-mail est chargé depuis `{{ .SiteURL }}/brand/logo-email.png` : la
+  **Site URL** (étape 4) doit être l'adresse Vercel, et le code doit être déployé.
 
 ## Vérifier
 

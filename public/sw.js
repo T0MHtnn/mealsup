@@ -7,8 +7,9 @@
 // - Autres fichiers du site (icônes, manifest) : cache, rafraîchi en arrière-plan.
 // - Les appels à Supabase (autre domaine) ne passent jamais par le cache.
 //
-// Changer CACHE_NAME n'est plus nécessaire à chaque déploiement.
-const CACHE_NAME = 'mealsup-v2'
+// Changer CACHE_NAME vide le cache de tous les appareils (v3 : nouveaux logos, et photos
+// de recettes mises en cache par erreur sous forme de page HTML).
+const CACHE_NAME = 'mealsup-v3'
 
 self.addEventListener('install', (event) => {
   // La nouvelle version prend la main tout de suite, sans attendre la fermeture de l'app
@@ -54,12 +55,19 @@ async function networkFirst(request) {
   }
 }
 
+/** Never keep an HTML page (an old "not found" fallback) in place of an image or a file. */
+function isCacheable(request, response) {
+  if (!response.ok) return false
+  const type = response.headers.get('content-type') || ''
+  return request.destination === 'document' || !type.includes('text/html')
+}
+
 async function cacheFirst(request) {
   const cache = await caches.open(CACHE_NAME)
   const cached = await cache.match(request)
   if (cached) return cached
   const response = await fetch(request)
-  if (response.ok) cache.put(request, response.clone())
+  if (isCacheable(request, response)) cache.put(request, response.clone())
   return response
 }
 
@@ -68,7 +76,7 @@ async function staleWhileRevalidate(request) {
   const cached = await cache.match(request)
   const network = fetch(request)
     .then((response) => {
-      if (response.ok) cache.put(request, response.clone())
+      if (isCacheable(request, response)) cache.put(request, response.clone())
       return response
     })
     .catch(() => cached)
