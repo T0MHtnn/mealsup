@@ -5,6 +5,7 @@ import { FOOD_CATEGORIES, GENERIC_FOODS, GROCERY_CATALOG } from '@/constants/gro
 import { normalizeText } from '@/utils/text'
 import { classifyGroceryItem } from '@/utils/groceryCategory'
 import { ingredientKey } from '@/utils/ingredients'
+import { searchableFoodText, shownFamily } from '@/utils/foodFamily'
 
 // Clean names to pick from: generic foods first (« Œufs »), then the food products of the shopping catalog
 const FOOD_NAMES = Array.from(
@@ -50,8 +51,9 @@ export default function FoodAutocomplete({ value, onChange, onSelect, placeholde
     const query = comparable(value.trim())
     if (!query) return []
     // A word of the name must start with what was typed ("tom" -> Tomates, Conserve de tomates; "ri" -> Riz, not Surimi)
+    // (or of its family: "pâtes" -> Penne, Spaghetti...)
     const matches = FOOD_NAMES.filter((name) =>
-      comparable(name)
+      comparable(searchableFoodText(name))
         .split(' ')
         .some((_, i, words) => words.slice(i).join(' ').startsWith(query))
     )
@@ -131,7 +133,10 @@ export default function FoodAutocomplete({ value, onChange, onSelect, placeholde
                     i === highlighted ? 'bg-tint-sage' : ''
                   }`}
                 >
-                  <span className="text-ink">{name}</span>
+                  <span className="text-ink">
+                    {name}
+                    {shownFamily(name) && <span className="text-ink-muted"> ({shownFamily(name)})</span>}
+                  </span>
                   <span className="flex items-center gap-1.5 shrink-0">
                     {inFridge && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary">

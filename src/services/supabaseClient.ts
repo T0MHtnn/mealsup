@@ -289,6 +289,11 @@ export const shoppingService = {
     return data?.[0]
   },
 
+  renameItem: async (itemId: string, foodName: string, category: string | null) => {
+    const { error } = await supabase.from('shopping_list_items').update({ food_name: foodName, category }).eq('id', itemId)
+    if (error) throw error
+  },
+
   removeItem: async (itemId: string) => {
     const { error } = await supabase
       .from('shopping_list_items')
@@ -380,6 +385,17 @@ export const userFoodService = {
     const { data, error } = await supabase
       .from('user_foods')
       .insert([{ user_id: userId, ...food }])
+      .select('id, name, category, price')
+      .single()
+    if (error) throw error
+    return { ...data, price: data.price == null ? null : Number(data.price) }
+  },
+
+  updateFood: async (foodId: string, food: Omit<UserFood, 'id'>): Promise<UserFood> => {
+    const { data, error } = await supabase
+      .from('user_foods')
+      .update(food)
+      .eq('id', foodId)
       .select('id, name, category, price')
       .single()
     if (error) throw error
@@ -686,6 +702,16 @@ export const adminService = {
     const { data, error } = await supabase.from('feedback').select('*').order('created_at', { ascending: false })
     if (error) throw error
     return data || []
+  },
+
+  /** Number of messages not marked as handled yet (badge of the admin tab). */
+  countOpenFeedback: async (): Promise<number> => {
+    const { count, error } = await supabase
+      .from('feedback')
+      .select('id', { count: 'exact', head: true })
+      .eq('resolved', false)
+    if (error) throw error
+    return count ?? 0
   },
 
   setFeedbackResolved: async (id: string, resolved: boolean) => {

@@ -29,15 +29,17 @@ function parsePrice(text: string): number | null {
 
 interface AddFoodModalProps {
   existing: UserFood[]
-  onAdd: (food: Omit<UserFood, 'id'>) => Promise<void>
+  /** The item being edited (otherwise a new one is added). */
+  initial?: UserFood
+  onSave: (food: Omit<UserFood, 'id'>) => Promise<void>
   onClose: () => void
 }
 
-/** Adds a product missing from the catalog to the member's own foods, with an optional price. */
-export default function AddFoodModal({ existing, onAdd, onClose }: AddFoodModalProps) {
+/** Adds (or edits) a product missing from the catalog in the member's own foods, with an optional price. */
+export default function AddFoodModal({ existing, initial, onSave, onClose }: AddFoodModalProps) {
   const { t } = useTranslation()
-  const [name, setName] = useState('')
-  const [priceText, setPriceText] = useState('')
+  const [name, setName] = useState(initial?.name ?? '')
+  const [priceText, setPriceText] = useState(initial?.price ? String(initial.price).replace('.', ',') : '')
   const [step, setStep] = useState<'form' | 'confirm'>('form')
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -52,7 +54,7 @@ export default function AddFoodModal({ existing, onAdd, onClose }: AddFoodModalP
     const key = productKey(trimmed)
     const inCatalog = CATALOG_KEYS.get(key)
     if (inCatalog) return setError(t('shopping.customExists', { category: inCatalog }))
-    if (existing.some((f) => productKey(f.name) === key)) return setError(t('shopping.customAlreadyAdded'))
+    if (existing.some((f) => f.id !== initial?.id && productKey(f.name) === key)) return setError(t('shopping.customAlreadyAdded'))
     if (Number.isNaN(price)) return setError(t('shopping.customInvalidPrice'))
     setStep('confirm')
   }
@@ -61,7 +63,7 @@ export default function AddFoodModal({ existing, onAdd, onClose }: AddFoodModalP
     setIsSaving(true)
     setError(null)
     try {
-      await onAdd({ name: trimmed, category: classifyGroceryItem(trimmed), price })
+      await onSave({ name: trimmed, category: classifyGroceryItem(trimmed), price })
     } catch (err) {
       console.error('Add custom food error:', err)
       setError(t('shopping.customError'))
@@ -70,7 +72,7 @@ export default function AddFoodModal({ existing, onAdd, onClose }: AddFoodModalP
   }
 
   return (
-    <Modal title={t('shopping.addCustom')} onClose={onClose}>
+    <Modal title={initial ? t('shopping.editCustom') : t('shopping.addCustom')} onClose={onClose}>
       {step === 'form' ? (
         <form onSubmit={review} className="space-y-3">
           <div className="flex gap-2">
@@ -112,14 +114,14 @@ export default function AddFoodModal({ existing, onAdd, onClose }: AddFoodModalP
         </form>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-ink">{t('shopping.customConfirmTitle')}</p>
+          <p className="text-sm text-ink">{initial ? t('shopping.customConfirmEditTitle') : t('shopping.customConfirmTitle')}</p>
           <div className="bg-surface-100 border border-border rounded-md p-3 space-y-1">
             <p className="text-lg font-display font-semibold text-ink break-words">« {trimmed} »</p>
             <p className="text-sm text-ink-muted">
               {price ? t('shopping.customConfirmPrice', { price: formatEuros(price) }) : t('shopping.customConfirmNoPrice')}
             </p>
           </div>
-          <p className="text-xs text-ink-muted">{t('shopping.customConfirmHint')}</p>
+          {!initial && <p className="text-xs text-ink-muted">{t('shopping.customConfirmHint')}</p>}
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex gap-2">
             <button
@@ -136,7 +138,7 @@ export default function AddFoodModal({ existing, onAdd, onClose }: AddFoodModalP
               disabled={isSaving}
               className="flex-1 py-2.5 bg-accent text-white rounded-full font-display font-semibold disabled:opacity-40"
             >
-              {t('shopping.customConfirm')}
+              {initial ? t('shopping.customSave') : t('shopping.customConfirm')}
             </button>
           </div>
         </div>

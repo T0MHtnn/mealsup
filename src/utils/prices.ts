@@ -156,8 +156,12 @@ export function estimateShoppingItemCost(name: string, quantity: number | null |
 export function catalogPackLabel(name: string, factor: number): string {
   const entry = shoppingEntry(name)
   const pack = packOf(entry)
-  const price = costOf(entry, toAmount(pack.qty, pack.unit)) * factor
-  return `${formatEstimate(price)} · ${formatAmount(pack.qty, pack.unit)}`
+  const amount = toAmount(pack.qty, pack.unit)
+  const price = costOf(entry, amount) * factor
+  // Sold by the piece: the usual weight too ("1 unité (≈ 800 g)")
+  const grams = amount.count !== undefined && entry.unitKg ? amount.count * entry.unitKg * 1000 : 0
+  const weight = grams >= 1000 ? ` (≈ ${formatAmount(Math.round(grams / 100) * 100, 'g')})` : grams > 0 ? ` (≈ ${Math.round(grams / 10) * 10 || Math.round(grams)} g)` : ''
+  return `${formatEstimate(price)} · ${formatAmount(pack.qty, pack.unit)}${weight}`
 }
 
 /** Estimated cost of a whole recipe and per serving. */

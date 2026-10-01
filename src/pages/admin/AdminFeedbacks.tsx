@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, RotateCcw, Trash2 } from 'lucide-react'
 import { adminService, type Feedback } from '@/services/supabaseClient'
 import { useTranslation } from '@/hooks/useTranslation'
+import { useAdminStore } from '@/store/adminStore'
 import { normalizeText } from '@/utils/text'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import SearchInput from '@/components/common/SearchInput'
@@ -37,6 +38,12 @@ export default function AdminFeedbacksPage() {
     }),
     [feedbacks]
   )
+
+  // Keep the badge of the tab in step with what is shown here
+  const setOpenFeedbacks = useAdminStore((state) => state.setOpenFeedbacks)
+  useEffect(() => {
+    if (!isLoading && !error) setOpenFeedbacks(counts.open)
+  }, [isLoading, error, counts.open, setOpenFeedbacks])
 
   const filtered = useMemo(() => {
     const query = normalizeText(search.trim())

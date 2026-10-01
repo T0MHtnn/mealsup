@@ -1,5 +1,6 @@
 import { DIETARY_RESTRICTIONS, type DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
 import { normalizeText } from '@/utils/text'
+import { matchesFood } from '@/utils/foodFamily'
 
 export interface RecipeWarnings {
   hasWarning: boolean
@@ -9,6 +10,11 @@ export interface RecipeWarnings {
 /** Why a food name is flagged: it matches an excluded food, a dietary restriction, or nothing. */
 export type FoodFlag = 'excluded' | 'restriction' | null
 
+/** Does a food name match one of the excluded foods ("Bananes" covers "Banane mûre", "Fromage" covers "Comté")? */
+export function isExcludedFood(foodName: string, excludedFoods: string[]): boolean {
+  return Boolean(foodName) && excludedFoods.some((excluded) => excluded && matchesFood(foodName, excluded))
+}
+
 /** Checks a single food / ingredient name against the user's excluded foods and dietary restrictions. */
 export function getFoodFlag(
   foodName: string,
@@ -17,7 +23,7 @@ export function getFoodFlag(
 ): FoodFlag {
   const name = normalizeText(foodName || '')
   if (!name) return null
-  if (excludedFoods.some((excluded) => excluded && name.includes(excluded))) return 'excluded'
+  if (isExcludedFood(foodName, excludedFoods)) return 'excluded'
   const forbiddenKeywords = restrictions.flatMap(
     (key) => DIETARY_RESTRICTIONS.find((r) => r.key === key)?.keywords || []
   )

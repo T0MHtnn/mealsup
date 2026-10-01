@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { userService } from '@/services/supabaseClient'
 import type { DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
-import { normalizeText } from '@/utils/text'
 import { getFoodFlag, getMissingEquipment, getRecipeWarnings } from '@/utils/warnings'
 
 /**
@@ -23,7 +22,7 @@ export function useFoodWarnings() {
       .then((prefs) => {
         setExcludedFoods(
           (Array.isArray(prefs?.allergies) ? prefs.allergies : [])
-            .map((s: string) => normalizeText(s))
+            .map((s: string) => s.trim())
             .filter(Boolean)
         )
         setRestrictions(Array.isArray(prefs?.dietary_restrictions) ? prefs.dietary_restrictions : [])

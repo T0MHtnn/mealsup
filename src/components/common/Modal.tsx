@@ -26,7 +26,7 @@ export default function Modal({ title, onClose, children, tall = false }: ModalP
             <X size={20} />
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="flex-1 min-h-0 overflow-auto overscroll-contain p-4 pb-[calc(2.5rem+env(safe-area-inset-bottom))] sm:pb-4">
           {children}
         </div>
       </div>

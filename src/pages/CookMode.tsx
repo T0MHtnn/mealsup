@@ -229,7 +229,7 @@ export default function CookModePage() {
         </div>
       )}
 
-      <footer className="grid grid-cols-2 gap-3 px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] bg-surface-100">
+      <footer className="grid grid-cols-2 gap-3 px-4 pt-2 pb-[calc(1.75rem+env(safe-area-inset-bottom))] bg-surface-100">
         <button
           onClick={() => setStep((s) => Math.max(0, s - 1))}
           disabled={step === 0}

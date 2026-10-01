@@ -7,9 +7,9 @@ import { authService, userService, feedbackService } from '@/services/supabaseCl
 import { useTranslation } from '@/hooks/useTranslation'
 import { EQUIPMENT_LIST, type EquipmentKey } from '@/constants/equipment'
 import { DIETARY_RESTRICTIONS, type DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
-import { FOOD_CATEGORIES, GENERIC_FOODS } from '@/constants/groceryCatalog'
+import { FOOD_CATEGORIES, GENERIC_FOODS, GROCERY_CATALOG } from '@/constants/groceryCatalog'
+import { foodTokens, searchableFoodText, shownFamily } from '@/utils/foodFamily'
 import { STORES, type StoreKey } from '@/constants/prices'
-import { normalizeText } from '@/utils/text'
 import LanguageSwitch from '@/components/common/LanguageSwitch'
 import EditProfileModal from '@/components/EditProfileModal'
 import Modal from '@/components/common/Modal'
@@ -23,8 +23,22 @@ const THEME_OPTIONS: { value: Theme; icon: typeof Sun }[] = [
 ]
 
 const EXTRA_EXCLUDABLE = ['Arachides', 'Fruits à coque', 'Gluten', 'Soja', 'Crustacés', 'Mollusques', 'Sésame']
-// Generic names (« Lait », « Œufs »), not store products (« Œufs x6 »): an exclusion matches every recipe that contains it
-const EXCLUDABLE_FOODS = Array.from(new Set([...FOOD_CATEGORIES.flatMap((cat) => GENERIC_FOODS[cat] ?? []), ...EXTRA_EXCLUDABLE]))
+// Families of foods: excluding one covers all its products (« Fromage » -> Comté, Brie...)
+const FAMILY_EXCLUDABLE = ['Pâtes', 'Fromage', 'Viande', 'Bœuf', 'Veau', 'Porc', 'Agneau', 'Volaille', 'Gibier', 'Abats',
+  'Charcuterie', 'Poisson', 'Fruits de mer', 'Salade', 'Légumineuses', 'Fruits secs', 'Alcool']
+// Generic names (« Lait », « Œufs ») and families first, then every food product of the catalog (« Andouillette »).
+// An exclusion matches every ingredient that contains it: « Bananes » also covers « Banane mûre ».
+const GENERIC_EXCLUDABLE = [...FOOD_CATEGORIES.flatMap((cat) => GENERIC_FOODS[cat] ?? []), ...FAMILY_EXCLUDABLE, ...EXTRA_EXCLUDABLE]
+const EXCLUDABLE_FOODS = (() => {
+  const seen = new Set<string>()
+  return [...GENERIC_EXCLUDABLE, ...FOOD_CATEGORIES.flatMap((cat) => GROCERY_CATALOG[cat])].filter((name) => {
+    const key = foodTokens(name).join(' ')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+})()
+const GENERIC_COUNT = new Set(GENERIC_EXCLUDABLE.map((name) => foodTokens(name).join(' '))).size
 
 export default function ProfilePage() {
   const { t } = useTranslation()
@@ -77,12 +91,19 @@ export default function ProfilePage() {
   }, [userId])
 
   const suggestions = useMemo(() => {
-    const query = normalizeText(excludeInput.trim())
-    if (!query) return []
-    const already = new Set(excludedFoods.map(normalizeText))
-    return EXCLUDABLE_FOODS.filter(
-      (f) => normalizeText(f).includes(query) && !already.has(normalizeText(f))
-    ).slice(0, 6)
+    const query = foodTokens(excludeInput.trim())
+    if (query.length === 0) return []
+    const already = new Set(excludedFoods.map((f) => foodTokens(f).join(' ')))
+    // Each word typed must start a word of the food (or of its family)
+    const matches = EXCLUDABLE_FOODS.map((name, index) => ({ name, index })).filter(({ name }) => {
+      const words = foodTokens(searchableFoodText(name))
+      return query.every((q) => words.some((w) => w.startsWith(q))) && !already.has(foodTokens(name).join(' '))
+    })
+    // Generic names first, then names starting with what was typed, then shorter ones
+    const rank = ({ name, index }: { name: string; index: number }) =>
+      (index < GENERIC_COUNT ? 0 : 2) + (foodTokens(name)[0]?.startsWith(query[0]) ? 0 : 1)
+    matches.sort((a, b) => rank(a) - rank(b) || a.name.length - b.name.length)
+    return matches.slice(0, 8).map(({ name }) => name)
   }, [excludeInput, excludedFoods])
 
   const addExcludedFood = (name: string) => {
@@ -424,6 +445,7 @@ export default function ProfilePage() {
                     className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-surface-100"
                   >
                     {s}
+                    {shownFamily(s) && <span className="text-ink-muted"> ({shownFamily(s)})</span>}
                   </button>
                 ))}
               </div>

@@ -7,14 +7,14 @@ import { useTranslation } from '@/hooks/useTranslation'
 import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import type { TranslationKey } from '@/i18n/translations'
 import type { DietaryRestrictionKey } from '@/constants/dietaryRestrictions'
-import { getRecipeWarnings } from '@/utils/warnings'
-import { normalizeText } from '@/utils/text'
+import { getRecipeWarnings, isExcludedFood } from '@/utils/warnings'
 import { formatDuration } from '@/utils/date'
 import { formatEstimate, unknownIngredients } from '@/utils/prices'
 import { formatAmount } from '@/utils/quantity'
 import { usePrices } from '@/hooks/usePrices'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
-import RecipeImage from '@/components/common/RecipeImage'
+import RecipeImage, { recipeImageSrc } from '@/components/common/RecipeImage'
+import ImageViewer from '@/components/common/ImageViewer'
 import DaySlotPickerModal from '@/components/DaySlotPickerModal'
 import RecipeRating from '@/components/RecipeRating'
 import { estimateRecipeNutrition } from '@/utils/nutrition'
@@ -32,6 +32,7 @@ export default function RecipeDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [servings, setServings] = useState(1)
+  const [showPhoto, setShowPhoto] = useState(false)
   const [activeTab, setActiveTab] = useState<'ingredients' | 'steps'>('ingredients')
   const [showPlanPicker, setShowPlanPicker] = useState(false)
   const [planAdded, setPlanAdded] = useState(false)
@@ -46,7 +47,7 @@ export default function RecipeDetailPage() {
         setServings(data?.servings || 1)
         setIsFavorite(favIds.includes(id))
         setExcludedFoods(
-          (Array.isArray(prefs?.allergies) ? prefs.allergies : []).map((s: string) => normalizeText(s))
+          (Array.isArray(prefs?.allergies) ? prefs.allergies : []).map((s: string) => s.trim())
         )
         setDietaryRestrictions(Array.isArray(prefs?.dietary_restrictions) ? prefs.dietary_restrictions : [])
       })
@@ -115,15 +116,23 @@ export default function RecipeDetailPage() {
   const isOwner = Boolean(userId) && recipe.created_by === userId
 
   const warnings = getRecipeWarnings(recipe, excludedFoods, dietaryRestrictions)
-  const hasExcludedMatch = (recipe.recipe_ingredients || []).some((ing: any) => {
-    const name = normalizeText(ing.ingredient_name || '')
-    return excludedFoods.some((f) => f && name.includes(f)) && warnings.matchedIngredientIds.has(ing.id)
-  })
+  const hasExcludedMatch = (recipe.recipe_ingredients || []).some(
+    (ing: any) => warnings.matchedIngredientIds.has(ing.id) && isExcludedFood(ing.ingredient_name || '', excludedFoods)
+  )
 
   return (
     <div>
       <div className="relative h-56 overflow-hidden">
         <RecipeImage recipe={recipe} size="full" iconSize={56} />
+        {recipe.image_url && (
+          // Tap the photo to see it full screen and zoom in
+          <button
+            type="button"
+            onClick={() => setShowPhoto(true)}
+            aria-label={t('recipes.photoZoom')}
+            className="absolute inset-0 w-full h-full cursor-zoom-in"
+          />
+        )}
         {recipe.image_url && recipe.image_credit && (
           // Author and license of a photo that is not the user's own (free licenses require it)
           <a
@@ -408,6 +417,13 @@ export default function RecipeDetailPage() {
 
       {showPlanPicker && (
         <DaySlotPickerModal onClose={() => setShowPlanPicker(false)} onConfirm={handleAddToPlan} />
+      )}
+      {showPhoto && recipe.image_url && (
+        <ImageViewer
+          src={recipeImageSrc(recipe.image_url, 'full') || recipe.image_url}
+          alt={recipe.title}
+          onClose={() => setShowPhoto(false)}
+        />
       )}
     </div>
   )

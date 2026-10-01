@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   Heart,
@@ -34,6 +34,7 @@ import { ingredientKey, recipeIngredientKeys } from '@/utils/ingredients'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import SearchInput from '@/components/common/SearchInput'
 import RecipeImage from '@/components/common/RecipeImage'
+import { saveRecipesScroll, saveRecipesSearch, savedRecipesScroll } from '@/utils/recipesListState'
 
 type SortKey = 'default' | 'time' | 'difficulty' | 'rating'
 const SORT_OPTIONS: SortKey[] = ['default', 'time', 'difficulty', 'rating']
@@ -104,7 +105,7 @@ export default function RecipesPage() {
         setFridgeKeys(new Set(fridgeItems.map((item: any) => ingredientKey(item.food_name))))
         setExcludedFoods(
           (Array.isArray(prefs?.allergies) ? prefs.allergies : [])
-            .map((s: string) => normalizeText(s))
+            .map((s: string) => s.trim())
             .filter(Boolean)
         )
         setEquipmentAll(prefs?.equipment_all ?? true)
@@ -114,6 +115,27 @@ export default function RecipesPage() {
       .catch((err) => console.error('Recipes load error:', err))
       .finally(() => setIsLoading(false))
   }, [userId])
+
+  // Remember the filters, so that the Recipes tab reopens with them
+  useEffect(() => {
+    const query = searchParams.toString()
+    saveRecipesSearch(query ? `?${query}` : '')
+  }, [searchParams])
+
+  // Back from a recipe (or another tab): same place in the list
+  const restoredScroll = useRef(false)
+  useLayoutEffect(() => {
+    if (isLoading) return
+    const scroller = document.getElementById('app-scroll')
+    if (!scroller) return
+    if (!restoredScroll.current) {
+      restoredScroll.current = true
+      scroller.scrollTop = savedRecipesScroll()
+    }
+    const onScroll = () => saveRecipesScroll(scroller.scrollTop)
+    scroller.addEventListener('scroll', onScroll, { passive: true })
+    return () => scroller.removeEventListener('scroll', onScroll)
+  }, [isLoading])
 
   const toggleFavorite = async (e: React.MouseEvent, recipeId: string) => {
     e.preventDefault()
@@ -364,7 +386,7 @@ export default function RecipesPage() {
                     {warnings.hasWarning && (
                       <span
                         title={t('warning.recipe')}
-                        className="w-7 h-7 rounded-full bg-surface-200 flex items-center justify-center text-danger"
+                        className="w-7 h-7 rounded-full bg-danger text-white shadow-md ring-2 ring-white flex items-center justify-center"
                       >
                         <AlertTriangle size={14} />
                       </span>
@@ -372,7 +394,7 @@ export default function RecipesPage() {
                     {missing.length > 0 && (
                       <span
                         title={t('warning.equipment')}
-                        className="w-7 h-7 rounded-full bg-surface-200 flex items-center justify-center text-accent"
+                        className="w-7 h-7 rounded-full bg-accent text-white shadow-md ring-2 ring-white flex items-center justify-center"
                       >
                         <Wrench size={13} />
                       </span>

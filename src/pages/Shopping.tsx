@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Minus, Trash2, Check, ChevronDown, History, Refrigerator, WifiOff, Info } from 'lucide-react'
+import { Plus, Minus, Trash2, Check, ChevronDown, History, Refrigerator, WifiOff, Info, Pencil } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { shoppingService, fridgeService, userFoodService, type UserFood } from '@/services/supabaseClient'
@@ -8,6 +8,7 @@ import { useFoodWarnings } from '@/hooks/useFoodWarnings'
 import { GROCERY_CATEGORIES, GROCERY_CATALOG, GROCERY_SECTIONS, type GroceryCategory } from '@/constants/groceryCatalog'
 import SearchInput from '@/components/common/SearchInput'
 import { simplify } from '@/utils/groceryCategory'
+import { searchableFoodText, shownFamily } from '@/utils/foodFamily'
 import { normalizeText } from '@/utils/text'
 import { itemCategory } from '@/utils/groceryCategory'
 import { formatAmount, isToTaste } from '@/utils/quantity'
@@ -90,6 +91,7 @@ export default function ShoppingPage() {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [userFoods, setUserFoods] = useState<UserFood[]>([])
   const [showAddFood, setShowAddFood] = useState(false)
+  const [editingFood, setEditingFood] = useState<UserFood | null>(null)
   const [addedFoodMessage, setAddedFoodMessage] = useState<string | null>(null)
   const [confirmRemoveFoodId, setConfirmRemoveFoodId] = useState<string | null>(null)
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
@@ -101,7 +103,8 @@ export default function ShoppingPage() {
     return GROCERY_CATEGORIES.map((category) => ({
       category,
       items: GROCERY_CATALOG[category].filter((name) => {
-        const nameWords = simplify(name).split(' ')
+        // "pâtes" also finds Penne, Spaghetti... ; "fromage" finds Comté...
+        const nameWords = simplify(searchableFoodText(name)).split(' ')
         return words.every((w) => nameWords.some((nw) => nw.startsWith(w)))
       }),
     })).filter((group) => group.items.length > 0)
@@ -254,6 +257,29 @@ export default function ShoppingPage() {
     setAddedFoodMessage(t('shopping.customAdded', { name: created.name }))
   }
 
+  // Renamed or new price: the lines of the shopping list follow
+  const handleEditFood = async (food: Omit<UserFood, 'id'>) => {
+    if (!userId || !editingFood) return
+    const previous = editingFood
+    const updated = await userFoodService.updateFood(previous.id, food)
+    const next = userFoods.map((f) => (f.id === previous.id ? updated : f)).sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    setUserFoods(next)
+    writeJson(foodsKey(userId), next)
+    setEditingFood(null)
+    setAddedFoodMessage(t('shopping.customSaved', { name: updated.name }))
+    if (updated.name !== previous.name) {
+      const renamed = items.filter((i) => normalizeText(i.food_name) === normalizeText(previous.name))
+      setItems((list) =>
+        list.map((i) => (renamed.includes(i) ? { ...i, food_name: updated.name, category: updated.category } : i))
+      )
+      for (const item of renamed) {
+        await shoppingService
+          .renameItem(item.id, updated.name, updated.category)
+          .catch((err) => console.error('Rename list item error:', err))
+      }
+    }
+  }
+
   const handleRemoveFood = async (food: UserFood) => {
     if (confirmRemoveFoodId !== food.id) {
       setConfirmRemoveFoodId(food.id)
@@ -381,12 +407,25 @@ export default function ShoppingPage() {
       >
         <span className="min-w-0">
           <span className={`text-sm flex items-center gap-1.5 ${qty > 0 ? 'text-ink font-medium' : 'text-ink-muted'}`}>
-            {name}
+            <span>
+              {name}
+              {shownFamily(name) && <span className="text-ink-muted font-normal"> ({shownFamily(name)})</span>}
+            </span>
             <FoodWarningBadge flag={foodFlag(name)} />
           </span>
           {priceLabel && <span className="block text-[11px] text-ink-muted">{priceLabel}</span>}
         </span>
         <div className="flex items-center gap-3">
+          {userFood && (
+            <button
+              onClick={() => setEditingFood(userFood)}
+              aria-label={t('shopping.editCustom')}
+              title={t('shopping.editCustom')}
+              className="w-7 h-7 rounded-full flex items-center justify-center text-ink-muted hover:text-ink"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
           {userFood && (
             <button
               onClick={() => handleRemoveFood(userFood)}
@@ -725,7 +764,16 @@ export default function ShoppingPage() {
       )}
 
       {showAddFood && (
-        <AddFoodModal existing={userFoods} onAdd={handleAddFood} onClose={() => setShowAddFood(false)} />
+        <AddFoodModal existing={userFoods} onSave={handleAddFood} onClose={() => setShowAddFood(false)} />
+      )}
+      {editingFood && (
+        <AddFoodModal
+          key={editingFood.id}
+          existing={userFoods}
+          initial={editingFood}
+          onSave={handleEditFood}
+          onClose={() => setEditingFood(null)}
+        />
       )}
 
       {showHistory && (
