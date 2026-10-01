@@ -365,11 +365,11 @@ export const GROCERY_SECTIONS: Record<GroceryCategory, CatalogSection[]> = {
     {
       title: 'Petit-déjeuner',
       items: [
-        'Corn flakes', 'Céréales au chocolat', 'Muesli', 'Granola', 'Flocons d\'avoine', 'Son d\'avoine',
-        'Pâte à tartiner', 'Pâte à tartiner sans huile de palme', 'Confiture de fraises', 'Confiture d\'abricots',
-        'Confiture de framboises', 'Confiture de cerises', 'Marmelade d\'oranges', 'Gelée de groseilles',
-        'Crème de marrons', 'Miel', 'Miel liquide', 'Sirop d\'érable', 'Sirop d\'agave', 'Beurre de cacahuète',
-        'Purée d\'amandes', 'Purée de noisettes', 'Speculoos à tartiner',
+        'Corn flakes', 'Céréales au chocolat (Chocapic)', 'Muesli', 'Granola', 'Flocons d\'avoine', 'Son d\'avoine',
+        'Pâte à tartiner (Nutella)', 'Pâte à tartiner sans huile de palme', 'Confiture de fraises',
+        'Confiture d\'abricots', 'Confiture de framboises', 'Confiture de cerises', 'Marmelade d\'oranges',
+        'Gelée de groseilles', 'Crème de marrons', 'Miel', 'Miel liquide', 'Sirop d\'érable', 'Sirop d\'agave',
+        'Beurre de cacahuète', 'Purée d\'amandes', 'Purée de noisettes', 'Speculoos à tartiner (Lotus)',
       ],
     },
     {
@@ -377,7 +377,7 @@ export const GROCERY_SECTIONS: Record<GroceryCategory, CatalogSection[]> = {
       items: [
         'Café moulu', 'Café en grains', 'Café soluble', 'Café décaféiné', 'Capsules de café',
         'Dosettes de café souples', 'Thé noir', 'Thé vert', 'Thé Earl Grey', 'Thé à la menthe', 'Infusions',
-        'Chicorée soluble', 'Chocolat en poudre', 'Cacao en poudre non sucré',
+        'Chicorée soluble', 'Chocolat en poudre (Nesquik)', 'Cacao en poudre non sucré',
       ],
     },
     {
@@ -486,8 +486,9 @@ export const GROCERY_SECTIONS: Record<GroceryCategory, CatalogSection[]> = {
     {
       title: 'Sodas & boissons fraîches',
       items: [
-        'Cola', 'Cola sans sucres', 'Limonade', 'Soda à l\'orange', 'Tonic', 'Ginger beer', 'Thé glacé',
-        'Boisson énergisante', 'Eau de coco', 'Kombucha',
+        'Cola (Coca-Cola)', 'Cola sans sucres (Coca-Cola Zero)', 'Limonade', 'Soda à l\'orange (Orangina, Fanta)',
+        'Tonic (Schweppes)', 'Ginger beer', 'Thé glacé (Ice Tea)', 'Boisson énergisante (Red Bull)', 'Eau de coco',
+        'Kombucha',
       ],
     },
     {
@@ -502,9 +503,9 @@ export const GROCERY_SECTIONS: Record<GroceryCategory, CatalogSection[]> = {
       items: [
         'Bière blonde', 'Bière blanche', 'Bière ambrée', 'Bière brune', 'Bière IPA', 'Bière sans alcool',
         'Cidre brut', 'Cidre doux', 'Vin rouge', 'Vin blanc sec', 'Vin rosé', 'Vin blanc moelleux', 'Champagne',
-        'Crémant', 'Prosecco', 'Vin cuit (Porto)', 'Muscat', 'Crème de cassis', 'Bitter apéritif (pour spritz)',
-        'Pastis', 'Vermouth blanc', 'Rhum blanc', 'Rhum ambré', 'Vodka', 'Gin', 'Whisky', 'Tequila', 'Cognac',
-        'Marsala', 'Calvados', 'Triple sec', 'Liqueur de café',
+        'Crémant', 'Prosecco', 'Vin cuit (Porto)', 'Muscat', 'Crème de cassis', 'Aperol', 'Pastis (Ricard)',
+        'Vermouth blanc (Martini)', 'Rhum blanc', 'Rhum ambré', 'Vodka', 'Gin', 'Whisky', 'Tequila', 'Cognac',
+        'Marsala', 'Calvados', 'Triple sec (Cointreau)', 'Liqueur de café (Kahlúa)',
       ],
     },
   ],

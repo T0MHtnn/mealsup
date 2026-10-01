@@ -71,6 +71,8 @@ export const PRICE_TABLE: PriceEntry[] = [
   P('oignons nouveaux, oignon nouveau', 6, 'kg', { unitKg: 0.03, pack: { qty: 1, unit: 'botte' } }),
   P('pois chiches secs, haricots blancs secs, pois casses', 3, 'kg', { pack: { qty: 500, unit: 'g' } }),
   P('tortilla', 0.3, 'unit', { unitKg: 0.04 }),
+  // avant le maïs : « fécule de maïs » n'est pas du maïs en conserve
+  P('fecule, maizena', 4, 'kg', { pack: { qty: 400, unit: 'g' } }),
   P('pois chiches, haricots rouges, haricots blancs, mais', 2.5, 'kg', { pack: { qty: 400, unit: 'g' } }),
   P('lentilles corail', 4, 'kg', { pack: { qty: 500, unit: 'g' } }),
   P('noix de muscade, muscade', 40, 'kg'),
@@ -262,7 +264,7 @@ export const PRICE_TABLE: PriceEntry[] = [
   P('houmous', 10, 'kg', { pack: { qty: 200, unit: 'g' } }),
   P('surimi', 9, 'kg', { pack: { qty: 250, unit: 'g' } }),
   P('chips, crackers', 8, 'kg', { pack: { qty: 150, unit: 'g' } }),
-  P('graines, fecule', 6, 'kg'),
+  P('graines', 6, 'kg'),
   P('proteine', 30, 'kg'),
 
   // --- Épicerie sucrée ---

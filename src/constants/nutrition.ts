@@ -73,6 +73,7 @@ export const NUTRITION: Record<string, Macros> = {
   surimi: [100, 8, 14, 1],
   chips: [530, 6, 52, 33],
   graines: [550, 20, 20, 45],
+  fecule: [350, 0.3, 87, 0.1],
   proteine: [380, 78, 8, 5],
   sucre: [400, 0, 100, 0],
   chocolat: [550, 7, 40, 38],

@@ -151,8 +151,8 @@ pain-au-lait.webp — Pain au lait — DocteurCosmos · CC BY-SA 3.0 — https:/
 pain-de-campagne-maison.webp — Pain de campagne maison — grongar · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Pain_de_Campagne.jpg
 pain-de-mie-maison.webp — Pain de mie maison — Bryan Alexander · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Pain_de_mie.jpg
 pain-et-chocolat-du-gouter.webp — Pain et chocolat du goûter — Luisfi · CC BY-SA 3.0 — https://commons.wikimedia.org/wiki/File:070205_birthday_bread_and_chocolate_guatemala.JPG
-pain-perdu.webp — Pain perdu — Jonathunder · CC BY-SA 3.0 — https://commons.wikimedia.org/wiki/File:FrenchToast.JPG
 pain-perdu-sale.webp — Pain perdu salé — Schnobby · CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Croque.jpg
+pain-perdu.webp — Pain perdu — Jonathunder · CC BY-SA 3.0 — https://commons.wikimedia.org/wiki/File:FrenchToast.JPG
 palmiers-feuilletes-au-pesto.webp — Palmiers feuilletés au pesto — jytyl · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Palmeras_de_hojaldre_1.jpg
 pancakes.webp — Pancakes — Kanko · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Make_a_pancake.jpg
 parmentier-de-canard.webp — Parmentier de canard — patrick janicek · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:PARMENTIER_DE_CONFIT_DE_CANARD_(46785839575).jpg
@@ -189,6 +189,7 @@ porc-effiloche.webp — Porc effiloché — Thogru · CC BY-SA 3.0 — https://c
 porridge-aux-flocons-d-avoine.webp — Porridge aux flocons d'avoine — Bodhi Peace · CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Cooked_oatmeal_in_bowl.jpg
 pot-au-feu.webp — Pot-au-feu — Andre · CC BY-SA 3.0 — https://commons.wikimedia.org/wiki/File:Pot-au-feu2.jpg
 poule-au-pot.webp — Poule au pot — Arnaud 25 · CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Poule_au_pot_02.jpg
+poulet-a-la-creme-champignons-et-pates-ou-riz.webp — Poulet à la crème, champignons et pâtes (ou riz) — Chad · CC BY-SA 2.0 — https://commons.wikimedia.org/wiki/File:Chicken-a-la-King.jpg
 poulet-a-la-creme-et-aux-champignons.webp — Poulet à la crème et aux champignons — Benoît Prieur · CC0 — https://commons.wikimedia.org/wiki/File:Poulet_de_Bresse_%C3%A0_la_cr%C3%A8me_(Le_Caf%C3%A9_fran%C3%A7ais)_f%C3%A9vrier_2023.jpg
 poulet-au-citron-piccata.webp — Poulet au citron (piccata) — Jon Sullivan · Public domain — https://commons.wikimedia.org/wiki/File:Chicken_piccata_dinner_cooking_food.jpg
 poulet-aux-quarante-gousses-d-ail.webp — Poulet aux quarante gousses d'ail — HaJunkiyada · CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Liat_Portal_for_Foodie_Disorder_-_Oven_baked_chicken_with_potatoes,_onions,_garlic,_and_rice.jpg
@@ -226,6 +227,7 @@ roti-de-porc-au-four.webp — Rôti de porc au four — Warren Dew · CC BY-SA 3
 roti-de-veau-aux-carottes.webp — Rôti de veau aux carottes — JIP · CC BY-SA 3.0 — https://commons.wikimedia.org/wiki/File:Veal_at_restaurant_Sf%C3%A4%C3%A4r,_Tallinn,_Estonia.jpg
 rougail-saucisse.webp — Rougail saucisse — The original uploader was Kikitoul at French Wikipedia. · CC BY-SA 3.0 — https://commons.wikimedia.org/wiki/File:Rougail_saucisse.jpg
 sables-aperitifs-au-parmesan.webp — Sablés apéritifs au parmesan — gkrew · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Cheese-straws-01.jpg
+salade-cesar-au-poulet-frit-maison.webp — Salade César au poulet frit maison — Andy Li · CC0 — https://commons.wikimedia.org/wiki/File:Chicken_Caesar_Salad_-_Amo_2026-04-11.jpg
 salade-cesar-poulet.webp — Salade César Poulet — pelican · CC BY-SA 2.0 — https://commons.wikimedia.org/wiki/File:Ceasar_salad_(6814864465).jpg
 salade-de-pates-mediterraneenne.webp — Salade de pâtes méditerranéenne — Brynn · CC BY-SA 3.0 — https://commons.wikimedia.org/wiki/File:Pasta_salad_closeup.JPG
 salade-de-riz-au-thon.webp — Salade de riz au thon — Karen and Brad Emerson · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Rice_salad_(3513765313).jpg
@@ -269,6 +271,8 @@ tajine-d-agneau-aux-pruneaux.webp — Tajine d'agneau aux pruneaux — Kinesira 
 tajine-de-poulet-aux-citrons-confits.webp — Tajine de poulet aux citrons confits — Foodista · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Moroccan_food-Chicken_tagine_with_preserved_lemons_and_olives-01.jpg
 tapenade.webp — Tapenade — Arnaud 25 · CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Tapenade_01.jpg
 tartare-de-boeuf.webp — Tartare de bœuf — insatiablemunch · CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Classic_steak_tartare.jpg
+tarte-au-citron-meringuee.webp — Tarte au citron meringuée — PDPhoto.org · Public domain — https://commons.wikimedia.org/wiki/File:A_Lemon_Meringue_Tart.jpg
+tarte-aux-fraises-ou-aux-framboises.webp — Tarte aux fraises ou aux framboises — An Mai · CC BY-SA 2.0 — https://commons.wikimedia.org/wiki/File:Fresh_strawberry_pie.jpg
 tarte-aux-pommes.webp — Tarte aux pommes — Adri08 · CC BY-SA 3.0 — https://commons.wikimedia.org/wiki/File:Tarte_aux_pommes_002.JPG
 tarte-tatin.webp — Tarte Tatin — Shani Evenstein (שני אבנשטיין) · CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Tarte_Tatin_a_la_Michalak.jpg
 tartiflette.webp — Tartiflette — Arnaud 25 · CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Tartiflette_6.jpg
